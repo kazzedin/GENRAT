@@ -36,7 +36,7 @@ def connection():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     # Bind the socket to an IP address and port
-    s.bind(("192.168.1.34", 443))
+    s.bind(("192.168.100.9", 443))
 
     # Start listening for incoming connections
     s.listen(5)

