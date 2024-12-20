@@ -31,7 +31,7 @@ def obfuscate_script(input_file, output_dir="obfuscated_scripts", pyarmor_path="
 
 if __name__ == "__main__":
     # Example usage
-    script_to_obfuscate = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.py"  # Replace with the path to your Python script
+    script_to_obfuscate = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\packed_client.py"  # Replace with the path to your Python script
     obfuscation_output_dir = "obfuscated_scripts"
 
     try:
