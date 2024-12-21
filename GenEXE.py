@@ -21,8 +21,7 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
             "-m", "nuitka",
             "--standalone",              # Crée un exécutable autonome
             "--onefile",                 # Génère un seul fichier exécutable
-            "--mingw64",                 # Utilise le compilateur MinGW64
-            "--nofollow-import-to=*",    # Ignore les imports inutilisés
+            "--mingw64",                 # Utilise le compilateur MinGW64  
             "--windows-disable-console"  # Supprime la console pour les applications GUI
         ]
 
