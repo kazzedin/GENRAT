@@ -55,6 +55,8 @@ def show_help():
     clear/cls         : Nettoyer l'écran.
     help              : Afficher cette aide.
     exit/quit         : Quitter la session.
+    
+    NOTER!! BIEN QUE VOUS POUVEZ UTILISER LES COMMANDES PROPRE A CHAQUE OS (Windows/Linux)
     """
     print(help_text)    
 #la fonction pour etablire la connexion avec la machine vicitme

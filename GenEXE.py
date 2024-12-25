@@ -5,8 +5,8 @@ import shutil
 
 def create_exe_with_nuitka(input_file: str, exe_name: str = None):
     """
-    Génère un fichier .exe à partir d'un script Python en utilisant Nuitka.
-
+    Génère un fichier .exe à partir d'un script Python en utilisant Nuitka avec nettoyage automatique.
+    
     :param input_file: Chemin vers le fichier Python source.
     :param exe_name: Nom de l'exécutable généré (facultatif).
     """
@@ -23,10 +23,10 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
         command = [
             sys.executable,
             "-m", "nuitka",
-            "--standalone",              # Crée un exécutable autonome
-            "--onefile",                 # Génère un seul fichier exécutable
-            "--mingw64",                 # Utilise le compilateur MinGW64  
-            "--windows-disable-console"  # Supprime la console pour les applications GUI
+            "--standalone",       # Crée un exécutable autonome
+            "--onefile",          # Génère un seul fichier exécutable
+            "--mingw64",          # Utilise le compilateur MinGW64
+            "--nofollow-imports" # Importer seullment les bib importants
         ]
 
         # Ajouter le fichier d'entrée
@@ -41,20 +41,26 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
             print("Compilation réussie.")
 
             # Déplacer l'exécutable généré vers le dossier courant
-            output_dir = os.path.join(os.getcwd(), "dist", exe_name)
-            if os.path.isfile(output_dir):
-                shutil.move(output_dir, os.path.join(os.getcwd(), exe_name))
+            exe_path = None
+            for root, _, files in os.walk("dist"):
+                for file in files:
+                    if file.endswith(".exe"):
+                        exe_path = os.path.join(root, file)
+                        break
+                if exe_path:
+                    break
+
+            if exe_path and os.path.isfile(exe_path):
+                shutil.move(exe_path, os.path.join(os.getcwd(), exe_name))
                 print(f"Fichier exécutable déplacé dans le dossier courant : {exe_name}")
             else:
                 print("Fichier généré introuvable.")
             
             # Nettoyer les dossiers temporaires
-            if os.path.isdir("dist"):
-                shutil.rmtree("dist")
-                print("Dossier 'dist' supprimé.")
-            if os.path.isdir("build"):
-                shutil.rmtree("build")
-                print("Dossier 'build' supprimé.")
+            for folder in ["dist", "build", "__pycache__"]:
+                if os.path.isdir(folder):
+                    shutil.rmtree(folder)
+                    print(f"Dossier '{folder}' supprimé.")
         else:
             print(f"Erreur lors de l'exécution de Nuitka : {result.stderr}")
             print(f"Sortie standard : {result.stdout}")
@@ -66,9 +72,8 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
     except Exception as e:
         print(f"Une erreur inattendue est survenue : {e}")
 
-
 if __name__ == "__main__":
     # Exemple d'utilisation
-    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.py"  # Modifiez ce chemin
-    exe_name = "client.exe"  # Nom de l'exécutable
+    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\server.py"  # Modifiez ce chemin
+    exe_name = "Server.exe"  # Nom de l'exécutable
     create_exe_with_nuitka(input_file, exe_name)
