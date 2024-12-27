@@ -137,9 +137,7 @@ class FileSelectionPage(CenteredFrame):
 
         # Menu déroulant et bouton pour sélectionner un fichier
         ctk.CTkLabel(self.inner_frame, text="Choisir l'extension :", font=("Arial", 14)).pack(pady=10)
-        self.extension_menu = ctk.CTkOptionMenu(self.inner_frame, values=[".exe", ".pdf", ".txt", ".docx"],
-                                                command=self.select_extension)
-        self.extension_menu.pack(pady=10)
+        
 
         ctk.CTkButton(self.inner_frame, text="Choisir un fichier", font=("Arial", 16),
                       command=self.choose_file).pack(pady=10)
@@ -154,9 +152,6 @@ class FileSelectionPage(CenteredFrame):
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
                       command=lambda: controller.show_page("NetworkSettingsPage")).pack(side="right", padx=10)
 
-    def select_extension(self, extension):
-        """Met à jour l'extension choisie."""
-        self.controller.user_choices["extension"] = extension
 
     def choose_file(self):
         file_path = filedialog.askopenfilename(title="Choisir un fichier")
@@ -184,13 +179,8 @@ class NetworkSettingsPage(CenteredFrame):
         self.port_entry.insert(0, str(self.controller.user_choices["port"]))
         self.port_entry.pack(pady=5)
 
-        # Méthode de chiffrement
-        ctk.CTkLabel(self.inner_frame, text="Méthode de chiffrement :", font=("Arial", 14)).pack(pady=5)
-        self.encryption_menu = ctk.CTkOptionMenu(self.inner_frame, values=["AES", "RSA"],
-                                                 command=self.select_encryption)
-        self.encryption_menu.set(self.controller.user_choices["encryption_method"])
-        self.encryption_menu.pack(pady=5)
-
+       
+       
         # Boutons de navigation
         button_frame = ctk.CTkFrame(self.inner_frame)
         button_frame.pack(fill="x", pady=20)

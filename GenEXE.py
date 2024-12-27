@@ -18,17 +18,27 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
         # Nom par défaut pour l'exécutable
         if not exe_name:
             exe_name = os.path.splitext(os.path.basename(input_file))[0] + ".exe"
-
+        basename=os.path.basename(input_file)
+        if(basename=="server"):
         # Commande Nuitka pour la création de l'exécutable
-        command = [
-            sys.executable,
-            "-m", "nuitka",
-            "--standalone",       # Crée un exécutable autonome
-            "--onefile",          # Génère un seul fichier exécutable
-            "--mingw64",          # Utilise le compilateur MinGW64
-            "--nofollow-imports" # Importer seullment les bib importants
-        ]
-
+            command = [
+                sys.executable,
+                "-m", "nuitka",
+                "--standalone",       # Crée un exécutable autonome
+                "--onefile",          # Génère un seul fichier exécutable
+                "--mingw64",          # Utilise le compilateur MinGW64
+                "--nofollow-imports" # Importer seullment les bib importants
+            ]
+        else:
+             command = [
+                sys.executable,
+                "-m", "nuitka",
+                "--standalone",       # Crée un exécutable autonome
+                "--onefile",          # Génère un seul fichier exécutable
+                "--mingw64",          # Utilise le compilateur MinGW64
+                "--windows-disable-console", # ne pas affiche le terminal
+                "--nofollow-imports" # Importer seullment les bib importants
+            ]
         # Ajouter le fichier d'entrée
         command.append(input_file)
 
@@ -74,6 +84,6 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
 
 if __name__ == "__main__":
     # Exemple d'utilisation
-    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\server.py"  # Modifiez ce chemin
-    exe_name = "Server.exe"  # Nom de l'exécutable
+    input_file = "C:\\Users\\HP\\OneDrive\\Desktop\\GENRAT\\GENRAT\\client.py"  # Modifiez ce chemin
+    exe_name = "Client.exe"  # Nom de l'exécutable
     create_exe_with_nuitka(input_file, exe_name)
